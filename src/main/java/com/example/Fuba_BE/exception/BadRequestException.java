@@ -1,9 +1,7 @@
 package com.example.Fuba_BE.exception;
 
-import org.springframework.http.HttpStatus;
-
-public class BadRequestException extends AppException {
+public class BadRequestException extends RuntimeException {
     public BadRequestException(String message) {
-        super(message, HttpStatus.BAD_REQUEST);
+        super(message);
     }
 }
