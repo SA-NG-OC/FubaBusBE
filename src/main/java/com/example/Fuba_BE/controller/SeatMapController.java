@@ -16,7 +16,7 @@ public class SeatMapController {
         this.seatMapService = seatMapService;
     }
 
-    // ✅ MIGRATION seats + seat_map
+    // ✅ MIGRATION seats + seat_map v
     @PostMapping("/{tripId}/seat-map/migrate")
     public ResponseEntity<SeatMapResponse> migrateSeatMap(
             @PathVariable Integer tripId,
