@@ -1,0 +1,17 @@
+package com.example.Fuba_BE.service.Route;
+
+import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
+import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+
+import java.util.List;
+
+public interface IRouteService {
+
+    RouteResponseDTO createRoute(RouteRequestDTO request);
+
+    RouteResponseDTO updateRoute(Integer routeId, RouteRequestDTO request);
+
+    void deleteRoute(Integer routeId);
+
+    List<RouteResponseDTO> getAllRoutesForUI();
+}
