@@ -2,6 +2,7 @@ package com.example.Fuba_BE.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -17,28 +18,25 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
-                        // 1. KLV: Những API MỞ CỬA (Ai cũng vào được)
                         .requestMatchers(
                                 "/api/auth/**",      // Đăng nhập, Đăng ký
                                 "/user/role/Buyer",        // Xem danh sách role (Ví dụ test)
                                 "/api/public/**",
-                                "/routes/**"// Các API công khai khác
+                                "/routes/**",// Các API công khai khác
+                                "/api/trips/seats/**"
                         ).permitAll()
 
-                        // 2. KLV: Những API cần TOKEN (Phải đăng nhập mới vào được)
-                        .requestMatchers("/api/tickets/**").authenticated() // Mua vé
-                        .requestMatchers("/api/users/**").authenticated()   // Xem user info
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 3. KLV: Những API dành riêng cho ADMIN (Phân quyền sâu hơn)
+                        .requestMatchers("/api/tickets/**").authenticated()
+                        .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // 4. CHỐT: Tất cả các request còn lại bắt buộc phải xác thực
-                        .anyRequest().authenticated()
+                        .anyRequest().permitAll()
+//                        .anyRequest().authenticated()
                 );
-
-        // SAU NÀY: Bạn sẽ chèn thêm một cái "Bộ lọc Token" (Filter) vào đây
-        // http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
