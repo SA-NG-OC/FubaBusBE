@@ -21,9 +21,10 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/**",
-                                "/user/role/Buyer",
+                                "/api/auth/**",      // Đăng nhập, Đăng ký
+                                "/user/role/Buyer",        // Xem danh sách role (Ví dụ test)
                                 "/api/public/**",
+                                "/routes/**",// Các API công khai khác
                                 "/api/trips/seats/**"
                         ).permitAll()
 
