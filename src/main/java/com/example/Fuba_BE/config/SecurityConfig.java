@@ -22,7 +22,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",      // Đăng nhập, Đăng ký
                                 "/user/role/Buyer",        // Xem danh sách role (Ví dụ test)
-                                "/api/public/**"     // Các API công khai khác
+                                "/api/public/**",
+                                "/routes/**"// Các API công khai khác
                         ).permitAll()
 
                         // 2. KLV: Những API cần TOKEN (Phải đăng nhập mới vào được)
