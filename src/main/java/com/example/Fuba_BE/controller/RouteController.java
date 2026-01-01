@@ -24,7 +24,8 @@ public class RouteController {
     private final IRouteService routeService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<RouteResponseDTO>>> getAllRoutes(
+    public ResponseEntity<ApiResponse<Page<RouteResponseDTO>>> getRoutes(
+            @RequestParam(required = false) String keyword,
             @PageableDefault(
                     page = 0,
                     size = 10,
@@ -32,10 +33,16 @@ public class RouteController {
                     direction = Sort.Direction.ASC
             ) Pageable pageable
     ) {
-        Page<RouteResponseDTO> routes = routeService.getAllRoutesForUI(pageable);
+        Page<RouteResponseDTO> result;
+
+        if (keyword == null || keyword.trim().isEmpty()) {
+            result = routeService.getAllRoutesForUI(pageable);
+        } else {
+            result = routeService.searchRoutes(keyword, pageable);
+        }
 
         return ResponseEntity.ok(
-                new ApiResponse<>(true, "Routes fetched successfully", routes)
+                new ApiResponse<>(true, "Routes fetched successfully", result)
         );
     }
 

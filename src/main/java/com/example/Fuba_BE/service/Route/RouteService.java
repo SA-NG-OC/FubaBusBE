@@ -112,6 +112,18 @@ public class RouteService implements IRouteService {
                 .map(this::enrichRouteResponse);
     }
 
+    // ================= SEARCH =================
+    @Override
+    public Page<RouteResponseDTO> searchRoutes(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAllRoutesForUI(pageable);
+        }
+
+        return routeRepository
+                .searchRoutes(keyword.trim(), pageable)
+                .map(this::enrichRouteResponse);
+    }
+
     // ================= HELPER =================
 
     private void validateRouteRequest(RouteRequestDTO request) {

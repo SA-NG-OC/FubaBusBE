@@ -17,4 +17,6 @@ public interface IRouteService {
 
     Page<RouteResponseDTO> getAllRoutesForUI(Pageable pageable);
 
+    Page<RouteResponseDTO> searchRoutes(String keyword, Pageable pageable);
+
 }
