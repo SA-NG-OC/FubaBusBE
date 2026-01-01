@@ -31,6 +31,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<?> handleNotFound(NotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                "success", false,
                 "timestamp", LocalDateTime.now().toString(),
                 "status", 404,
                 "error", "NOT_FOUND",

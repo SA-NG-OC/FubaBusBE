@@ -358,6 +358,7 @@ public class GlobalExceptionHandler {
 package com.example.Fuba_BE.mapper;
 
 import com.example.Fuba_BE.domain.entity.User;
+import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.dto.CreateUserDTO;
 import com.example.Fuba_BE.dto.UserDTO;
 import org.springframework.stereotype.Component;
@@ -366,7 +367,7 @@ import org.springframework.stereotype.Component;
 public class UserMapper {
 
     // Entity -> DTO
-    public UserDTO toDTO(com.example.Fuba_BE.domain.entity.User user) {
+    public UserDTO toDTO(User user) {
         if (user == null) return null;
 
         UserDTO dto = new UserDTO();
@@ -396,7 +397,7 @@ public class UserMapper {
         user.setIsActive(dto.getIsActive());
 
         if (dto.getRole() != null) {
-            user.setRole(User.UserRole.valueOf(dto.getRole()));
+            user.setRole(com.example.Fuba_BE.domain.entity.User.UserRole.valueOf(dto.getRole()));
         }
 
         return user;
@@ -406,7 +407,7 @@ public class UserMapper {
     public User toEntity(CreateUserDTO dto) {
         if (dto == null) return null;
 
-        User user = new User();
+        User user = new com.example.Fuba_BE.domain.entity.User();
         user.setUsername(dto.getUsername());
         user.setEmail(dto.getEmail());
         user.setPassword(dto.getPassword()); // Sẽ được mã hóa ở Service
@@ -443,7 +444,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UserRepository extends JpaRepository<com.example.Fuba_BE.domain.entity.User, Long> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
     // Spring tự động implement dựa trên tên method
     Optional<User> findByUsername(String username);
@@ -455,7 +456,7 @@ public interface UserRepository extends JpaRepository<com.example.Fuba_BE.domain
     boolean existsByEmail(String email);
 
     // Tìm users theo role
-    List<com.example.Fuba_BE.domain.entity.User> findByRole(User.UserRole role);
+    List<User> findByRole(User.UserRole role);
 
     // Tìm users đang active
     List<User> findByIsActiveTrue();
@@ -466,7 +467,7 @@ public interface UserRepository extends JpaRepository<com.example.Fuba_BE.domain
 
     // Native SQL query
     @Query(value = "SELECT * FROM users WHERE created_at > :date", nativeQuery = true)
-    List<com.example.Fuba_BE.domain.entity.User> findUsersCreatedAfter(@Param("date") String date);
+    List<User> findUsersCreatedAfter(@Param("date") String date);
 }
 ```
 
@@ -486,6 +487,7 @@ public interface UserRepository extends JpaRepository<com.example.Fuba_BE.domain
 ```java
 package com.example.Fuba_BE.service;
 
+import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.dto.CreateUserDTO;
 import com.example.Fuba_BE.dto.UserDTO;
@@ -551,7 +553,7 @@ public class UserService {
 
     // Cập nhật user
     public UserDTO updateUser(Long id, UserDTO userDTO) {
-        User existingUser = userRepository.findById(id)
+        com.example.Fuba_BE.domain.entity.User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
 
         // Cập nhật thông tin

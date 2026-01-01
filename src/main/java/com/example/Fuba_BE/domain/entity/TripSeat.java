@@ -1,5 +1,6 @@
 package com.example.Fuba_BE.domain.entity;
 
+import com.example.Fuba_BE.domain.enums.SeatStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class TripSeat {
 
     @Id
@@ -25,9 +27,11 @@ public class TripSeat {
     private String seatNumber;
 
     @Column(name = "floornumber")
+    @Builder.Default
     private Integer floorNumber = 1;
 
     @Column(name = "seattype")
+    @Builder.Default
     private String seatType = "Thường";
 
     @Column(name = "status")
@@ -36,6 +40,13 @@ public class TripSeat {
     @Column(name = "holdexpiry")
     private LocalDateTime holdExpiry;
 
+    @Column(name = "lockedby")
+    private String lockedBy;
+
+    @Column(name = "lockedbysessionid")
+    private String lockedBySessionId;
+
+
     @Column(name = "createdat")
     private LocalDateTime createdAt;
 
@@ -43,4 +54,63 @@ public class TripSeat {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+
+    /**
+     * Helper method to check if the seat is available for locking
+     */
+    public boolean isAvailable() {
+        return SeatStatus.AVAILABLE.getDisplayName().equals(this.status);
+    }
+
+    /**
+     * Helper method to check if the seat is currently locked
+     */
+    public boolean isLocked() {
+        return SeatStatus.LOCKED.getDisplayName().equals(this.status);
+    }
+
+    /**
+     * Helper method to check if the seat is booked
+     */
+    public boolean isBooked() {
+        return SeatStatus.BOOKED.getDisplayName().equals(this.status);
+    }
+
+    /**
+     * Helper method to check if the lock has expired
+     */
+    public boolean isLockExpired() {
+        return holdExpiry != null && LocalDateTime.now().isAfter(holdExpiry);
+    }
+
+    /**
+     * Lock this seat for a specific user and session
+     */
+    public void lock(String userId, String sessionId, int lockDurationMinutes) {
+        this.status = SeatStatus.LOCKED.getDisplayName();
+        this.lockedBy = userId;
+        this.lockedBySessionId = sessionId;
+        this.holdExpiry = LocalDateTime.now().plusMinutes(lockDurationMinutes);
+    }
+
+    /**
+     * Release the lock on this seat
+     */
+    public void release() {
+        this.status = SeatStatus.AVAILABLE.getDisplayName();
+        this.lockedBy = null;
+        this.lockedBySessionId = null;
+        this.holdExpiry = null;
+    }
+
+    /**
+     * Mark this seat as booked
+     */
+    public void book() {
+        this.status = SeatStatus.BOOKED.getDisplayName();
+        this.holdExpiry = null;
+        // Keep lockedBy as the booking user reference
+    }
+
 }

@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.dto.seat;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +10,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class TripSeatDto {
     private Integer seatId;
     private String seatNumber;     // A1, A2, ... B1...
@@ -16,4 +18,5 @@ public class TripSeatDto {
     private String seatType;       // "Thường"
     private String status;         // "Trống" | "Đang giữ" | "Đã đặt"
     private LocalDateTime holdExpiry;
+    private String lockedBy;       // User ID who locked the seat (null if available)
 }

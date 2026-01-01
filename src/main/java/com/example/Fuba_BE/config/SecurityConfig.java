@@ -29,7 +29,12 @@ public class SecurityConfig {
                                 "/user/role/Buyer",        // Xem danh sách role (Ví dụ test)
                                 "/api/public/**",
                                 "/routes/**",// Các API công khai khác
-                                "/api/trips/seats/**"
+                                "/api/trips/seats/**",
+                                // WebSocket endpoints
+                                "/ws/**",
+                                "/ws",
+                                // Seat locking REST endpoints
+                                "/api/seats/**"
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
