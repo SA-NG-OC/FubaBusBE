@@ -13,6 +13,8 @@ import com.example.Fuba_BE.repository.LocationRepository;
 import com.example.Fuba_BE.repository.RouteRepository;
 import com.example.Fuba_BE.repository.RouteStopRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,11 +107,21 @@ public class RouteService implements IRouteService {
 
     // ================= GET ALL =================
     @Override
-    public List<RouteResponseDTO> getAllRoutesForUI() {
-        return routeRepository.findAll()
-                .stream()
-                .map(this::enrichRouteResponse)
-                .collect(Collectors.toList());
+    public Page<RouteResponseDTO> getAllRoutesForUI(Pageable pageable) {
+        return routeRepository.findAll(pageable)
+                .map(this::enrichRouteResponse);
+    }
+
+    // ================= SEARCH =================
+    @Override
+    public Page<RouteResponseDTO> searchRoutes(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return getAllRoutesForUI(pageable);
+        }
+
+        return routeRepository
+                .searchRoutes(keyword.trim(), pageable)
+                .map(this::enrichRouteResponse);
     }
 
     // ================= HELPER =================

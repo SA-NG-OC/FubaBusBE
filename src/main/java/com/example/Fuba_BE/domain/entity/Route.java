@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "routes")
@@ -44,6 +45,14 @@ public class Route {
 
     @Column(name = "updatedat")
     private LocalDateTime updatedAt;
+
+    @OneToMany(
+            mappedBy = "route",
+            fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<RouteStop> routeStops;
 
     @PrePersist
     protected void onCreate() {

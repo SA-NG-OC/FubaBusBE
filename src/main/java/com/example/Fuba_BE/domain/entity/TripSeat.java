@@ -35,7 +35,6 @@ public class TripSeat {
     private String seatType = "Thường";
 
     @Column(name = "status")
-    @Builder.Default
     private String status = "Trống";
 
     @Column(name = "holdexpiry")
@@ -47,6 +46,7 @@ public class TripSeat {
     @Column(name = "lockedbysessionid")
     private String lockedBySessionId;
 
+
     @Column(name = "createdat")
     private LocalDateTime createdAt;
 
@@ -54,6 +54,7 @@ public class TripSeat {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
 
     /**
      * Helper method to check if the seat is available for locking
@@ -111,4 +112,5 @@ public class TripSeat {
         this.holdExpiry = null;
         // Keep lockedBy as the booking user reference
     }
+
 }
