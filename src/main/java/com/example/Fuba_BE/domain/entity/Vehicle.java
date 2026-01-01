@@ -1,43 +1,39 @@
-package com.example.Fuba_BE.domain;
+package com.example.Fuba_BE.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "routes")
+@Table(name = "vehicles")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Route {
+public class Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "routeid")
-    private Integer routeId;
+    @Column(name = "vehicleid")
+    private Integer vehicleId;
 
-    @Column(name = "routename", nullable = false)
-    private String routeName;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "originid", nullable = false)
-    private Location origin;
+    @Column(name = "licenseplate", nullable = false, unique = true)
+    private String licensePlate;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "destinationid", nullable = false)
-    private Location destination;
+    @JoinColumn(name = "typeid", nullable = false)
+    private VehicleType vehicleType;
 
-    @Column(name = "distance", nullable = false)
-    private BigDecimal distance;
+    @Column(name = "insurancenumber")
+    private String insuranceNumber;
 
-    @Column(name = "estimatedduration", nullable = false)
-    private Integer estimatedDuration;
+    @Column(name = "insuranceexpiry")
+    private LocalDate insuranceExpiry;
 
     @Column(name = "status")
-    private String status = "Hoạt động";
+    private String status = "Hoàn thiện";
 
     @Column(name = "createdat")
     private LocalDateTime createdAt;

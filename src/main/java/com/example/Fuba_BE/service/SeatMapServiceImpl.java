@@ -1,9 +1,9 @@
 package com.example.Fuba_BE.service;
 
-import com.example.Fuba_BE.domain.Trip;
-import com.example.Fuba_BE.domain.TripSeat;
-import com.example.Fuba_BE.domain.Vehicle;
-import com.example.Fuba_BE.domain.VehicleType;
+import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.domain.entity.TripSeat;
+import com.example.Fuba_BE.domain.entity.Vehicle;
+import com.example.Fuba_BE.domain.entity.VehicleType;
 import com.example.Fuba_BE.dto.seat.MigrateSeatMapRequest;
 import com.example.Fuba_BE.dto.seat.SeatMapResponse;
 import com.example.Fuba_BE.dto.seat.TripSeatDto;

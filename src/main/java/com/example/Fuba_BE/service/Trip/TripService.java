@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.service.Trip;
 
-import com.example.Fuba_BE.domain.Trip;
+import com.example.Fuba_BE.domain.entity.Trip;
 import com.example.Fuba_BE.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;

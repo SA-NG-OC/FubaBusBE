@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.Location;
+import com.example.Fuba_BE.domain.entity.Location;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

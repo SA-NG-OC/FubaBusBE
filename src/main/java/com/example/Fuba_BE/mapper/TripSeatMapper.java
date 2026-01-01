@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.mapper;
 
-import com.example.Fuba_BE.domain.TripSeat;
+import com.example.Fuba_BE.domain.entity.TripSeat;
 import com.example.Fuba_BE.dto.seat.TripSeatDto;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

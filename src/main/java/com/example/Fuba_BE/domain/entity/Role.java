@@ -1,4 +1,4 @@
-package com.example.Fuba_BE.domain;
+package com.example.Fuba_BE.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -7,25 +7,19 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "vehicletypes")
+@Table(name = "roles")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class VehicleType {
+public class Role {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "typeid")
-    private Integer typeId;
+    @Column(name = "roleid")
+    private Integer roleId;
 
-    @Column(name = "typename", nullable = false, unique = true)
-    private String typeName;
-
-    @Column(name = "totalseats", nullable = false)
-    private Integer totalSeats;
-
-    @Column(name = "numberoffloors")
-    private Integer numberOfFloors = 1;
+    @Column(name = "rolename", nullable = false, unique = true)
+    private String roleName;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -33,8 +27,17 @@ public class VehicleType {
     @Column(name = "createdat")
     private LocalDateTime createdAt;
 
+    @Column(name = "updatedat")
+    private LocalDateTime updatedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }
