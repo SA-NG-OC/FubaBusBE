@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.service;
 
-import com.example.Fuba_BE.domain.TripSeat;
+import com.example.Fuba_BE.domain.entity.TripSeat;
 import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
 import com.example.Fuba_BE.repository.TripSeatRepository;
 import org.slf4j.Logger;

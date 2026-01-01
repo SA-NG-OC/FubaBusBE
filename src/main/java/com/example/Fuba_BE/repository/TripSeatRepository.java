@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.TripSeat;
+import com.example.Fuba_BE.domain.entity.TripSeat;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

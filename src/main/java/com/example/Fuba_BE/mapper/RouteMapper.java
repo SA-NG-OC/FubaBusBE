@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.mapper;
 
-import com.example.Fuba_BE.domain.Route;
+import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
 import org.mapstruct.*;

@@ -353,21 +353,23 @@ public class GlobalExceptionHandler {
 - Giúp code sạch hơn và dễ maintain
 
 **Ví dụ - UserMapper.java**:
+
 ```java
 package com.example.Fuba_BE.mapper;
 
-import com.example.Fuba_BE.domain.User;
+import com.example.Fuba_BE.domain.entity.User;
+import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.dto.CreateUserDTO;
 import com.example.Fuba_BE.dto.UserDTO;
 import org.springframework.stereotype.Component;
 
 @Component
 public class UserMapper {
-    
+
     // Entity -> DTO
     public UserDTO toDTO(User user) {
         if (user == null) return null;
-        
+
         UserDTO dto = new UserDTO();
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
@@ -378,40 +380,40 @@ public class UserMapper {
         dto.setIsActive(user.getIsActive());
         dto.setCreatedAt(user.getCreatedAt());
         dto.setUpdatedAt(user.getUpdatedAt());
-        
+
         return dto;
     }
-    
+
     // DTO -> Entity
-    public User toEntity(UserDTO dto) {
+    public com.example.Fuba_BE.domain.entity.User toEntity(UserDTO dto) {
         if (dto == null) return null;
-        
-        User user = new User();
+
+        User user = new com.example.Fuba_BE.domain.entity.User();
         user.setId(dto.getId());
         user.setUsername(dto.getUsername());
         user.setEmail(dto.getEmail());
         user.setFullName(dto.getFullName());
         user.setPhoneNumber(dto.getPhoneNumber());
         user.setIsActive(dto.getIsActive());
-        
+
         if (dto.getRole() != null) {
-            user.setRole(User.UserRole.valueOf(dto.getRole()));
+            user.setRole(com.example.Fuba_BE.domain.entity.User.UserRole.valueOf(dto.getRole()));
         }
-        
+
         return user;
     }
-    
+
     // CreateUserDTO -> Entity
     public User toEntity(CreateUserDTO dto) {
         if (dto == null) return null;
-        
-        User user = new User();
+
+        User user = new com.example.Fuba_BE.domain.entity.User();
         user.setUsername(dto.getUsername());
         user.setEmail(dto.getEmail());
         user.setPassword(dto.getPassword()); // Sẽ được mã hóa ở Service
         user.setFullName(dto.getFullName());
         user.setPhoneNumber(dto.getPhoneNumber());
-        
+
         return user;
     }
 }
@@ -428,10 +430,11 @@ public class UserMapper {
 - Có thể thêm custom query với `@Query`
 
 **Ví dụ - UserRepository.java**:
+
 ```java
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.User;
+import com.example.Fuba_BE.domain.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -442,23 +445,26 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
-    
+
     // Spring tự động implement dựa trên tên method
     Optional<User> findByUsername(String username);
+
     Optional<User> findByEmail(String email);
+
     boolean existsByUsername(String username);
+
     boolean existsByEmail(String email);
-    
+
     // Tìm users theo role
     List<User> findByRole(User.UserRole role);
-    
+
     // Tìm users đang active
     List<User> findByIsActiveTrue();
-    
+
     // Custom query với JPQL
     @Query("SELECT u FROM User u WHERE u.fullName LIKE %:keyword% OR u.username LIKE %:keyword%")
     List<User> searchUsers(@Param("keyword") String keyword);
-    
+
     // Native SQL query
     @Query(value = "SELECT * FROM users WHERE created_at > :date", nativeQuery = true)
     List<User> findUsersCreatedAfter(@Param("date") String date);
@@ -477,10 +483,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 - Sử dụng Mapper để chuyển đổi Entity/DTO
 
 **Ví dụ - UserService.java**:
+
 ```java
 package com.example.Fuba_BE.service;
 
-import com.example.Fuba_BE.domain.User;
+import com.example.Fuba_BE.domain.entity.User;
+import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.dto.CreateUserDTO;
 import com.example.Fuba_BE.dto.UserDTO;
 import com.example.Fuba_BE.exception.UserNotFoundException;
@@ -498,11 +506,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class UserService {
-    
+
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-    
+
     // Lấy tất cả users
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll()
@@ -510,53 +518,53 @@ public class UserService {
                 .map(userMapper::toDTO)
                 .collect(Collectors.toList());
     }
-    
+
     // Lấy user theo ID
     public UserDTO getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
         return userMapper.toDTO(user);
     }
-    
+
     // Tạo user mới
     public UserDTO createUser(CreateUserDTO createUserDTO) {
         // Kiểm tra username đã tồn tại
         if (userRepository.existsByUsername(createUserDTO.getUsername())) {
             throw new RuntimeException("Username đã tồn tại");
         }
-        
+
         // Kiểm tra email đã tồn tại
         if (userRepository.existsByEmail(createUserDTO.getEmail())) {
             throw new RuntimeException("Email đã tồn tại");
         }
-        
+
         // Chuyển DTO -> Entity
         User user = userMapper.toEntity(createUserDTO);
-        
+
         // Mã hóa password
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        
+
         // Lưu vào database
         User savedUser = userRepository.save(user);
-        
+
         // Trả về DTO
         return userMapper.toDTO(savedUser);
     }
-    
+
     // Cập nhật user
     public UserDTO updateUser(Long id, UserDTO userDTO) {
-        User existingUser = userRepository.findById(id)
+        com.example.Fuba_BE.domain.entity.User existingUser = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
-        
+
         // Cập nhật thông tin
         existingUser.setFullName(userDTO.getFullName());
         existingUser.setPhoneNumber(userDTO.getPhoneNumber());
         existingUser.setIsActive(userDTO.getIsActive());
-        
+
         User updatedUser = userRepository.save(existingUser);
         return userMapper.toDTO(updatedUser);
     }
-    
+
     // Xóa user
     public void deleteUser(Long id) {
         if (!userRepository.existsById(id)) {
@@ -564,7 +572,7 @@ public class UserService {
         }
         userRepository.deleteById(id);
     }
-    
+
     // Tìm kiếm users
     public List<UserDTO> searchUsers(String keyword) {
         return userRepository.searchUsers(keyword)

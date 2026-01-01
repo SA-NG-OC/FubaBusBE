@@ -1,4 +1,4 @@
-package com.example.Fuba_BE.domain;
+package com.example.Fuba_BE.domain.entity;
 
 import com.example.Fuba_BE.domain.enums.SeatStatus;
 import jakarta.persistence.*;

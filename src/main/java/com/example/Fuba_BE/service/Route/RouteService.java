@@ -1,8 +1,8 @@
 package com.example.Fuba_BE.service.Route;
 
-import com.example.Fuba_BE.domain.Location;
-import com.example.Fuba_BE.domain.Route;
-import com.example.Fuba_BE.domain.RouteStop;
+import com.example.Fuba_BE.domain.entity.Location;
+import com.example.Fuba_BE.domain.entity.Route;
+import com.example.Fuba_BE.domain.entity.RouteStop;
 import com.example.Fuba_BE.domain.enums.StopType;
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
