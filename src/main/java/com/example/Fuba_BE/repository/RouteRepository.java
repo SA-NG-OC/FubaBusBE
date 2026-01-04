@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface RouteRepository extends JpaRepository<Route, Integer> {
 
@@ -28,4 +30,6 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    List<Route> findByStatus(String status);
 }

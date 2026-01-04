@@ -2,9 +2,11 @@ package com.example.Fuba_BE.controller;
 
 import com.example.Fuba_BE.domain.entity.Trip;
 import com.example.Fuba_BE.dto.Trip.TripCalendarDTO;
+import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripStatusUpdateRequestDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.service.Trip.ITripService;
 import com.example.Fuba_BE.service.Trip.TripService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,17 +29,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TripController {
     @Autowired
-    private TripService tripService; // Gọi ông Quản lý ra để chờ lệnh
-
-    @PostMapping
-    public Trip createTrip(@RequestBody Trip trip) {
-        // @RequestBody: Dịch bức thư JSON từ khách gửi thành Object Java
-        return tripService.createTrip(trip);
-    }
+    private ITripService tripService; // Gọi ông Quản lý ra để chờ lệnh
 
     @GetMapping("")
     public Page<TripDetailedResponseDTO> getTrips(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date, // Thêm dòng này
             @PageableDefault(
                     page = 0,
                     size = 10,
@@ -44,7 +42,8 @@ public class TripController {
                     direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
-        return tripService.getTripsByStatus(status, pageable);
+        // Truyền cả status và date xuống service
+        return tripService.getTripsByFilters(status, date, pageable);
     }
 
 
@@ -73,4 +72,10 @@ public class TripController {
         tripService.updateTripStatus(tripId, request.getStatus());
     }
 
+    // API CREATE TRIP
+    @PostMapping
+    public ResponseEntity<TripDetailedResponseDTO> createTrip(@Valid @RequestBody TripCreateRequestDTO request) {
+        TripDetailedResponseDTO newTrip = tripService.createTrip(request);
+        return new ResponseEntity<>(newTrip, HttpStatus.CREATED);
+    }
 }

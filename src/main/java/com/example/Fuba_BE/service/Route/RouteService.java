@@ -5,10 +5,12 @@ import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.domain.entity.RouteStop;
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+import com.example.Fuba_BE.dto.Routes.RouteSelectionDTO;
 import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.RouteMapper;
+import com.example.Fuba_BE.mapper.SelectionMapper;
 import com.example.Fuba_BE.repository.LocationRepository;
 import com.example.Fuba_BE.repository.RouteRepository;
 import com.example.Fuba_BE.repository.RouteStopRepository;
@@ -31,6 +33,7 @@ public class RouteService implements IRouteService {
     private final RouteStopRepository routeStopRepository;
     private final LocationRepository locationRepository;
     private final RouteMapper routeMapper;
+    private final SelectionMapper selectionMapper;
 
     // --- Helper: Tìm Location theo tên chính xác ---
     private Location getLocationByName(String locationName) {
@@ -249,4 +252,15 @@ public class RouteService implements IRouteService {
         dto.setTotalStops(stops.size());
         return dto;
     }
+
+    @Override
+    public List<RouteSelectionDTO> getAllRoutesForSelection() {
+        // Chỉ lấy các tuyến đang Hoạt động
+        List<Route> routes = routeRepository.findByStatus("Active");
+
+        return routes.stream()
+                .map(selectionMapper::toRouteSelectionDTO)
+                .toList();
+    }
+
 }

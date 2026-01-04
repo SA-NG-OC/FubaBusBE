@@ -42,4 +42,18 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
             @Param("tripId") Integer tripId,
             @Param("status") String status
     );
+
+    Page<Trip> findByDepartureTimeBetween(
+            LocalDateTime start,
+            LocalDateTime end,
+            Pageable pageable
+    );
+
+    Page<Trip> findByStatusAndDepartureTimeBetween(
+            String status,
+            LocalDateTime start,
+            LocalDateTime end,
+            Pageable pageable
+    );
+
 }

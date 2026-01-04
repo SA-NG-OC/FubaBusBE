@@ -1,11 +1,19 @@
 package com.example.Fuba_BE.service.Trip;
 
+import com.example.Fuba_BE.domain.entity.Driver;
+import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.domain.entity.Vehicle;
 import com.example.Fuba_BE.dto.Trip.TripCalendarDTO;
+import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
+import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
+import com.example.Fuba_BE.repository.DriverRepository;
+import com.example.Fuba_BE.repository.RouteRepository;
 import com.example.Fuba_BE.repository.TripRepository;
+import com.example.Fuba_BE.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import org.flywaydb.core.internal.util.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +35,9 @@ public class TripService implements ITripService {
     @Autowired
     private TripRepository tripRepository;
     private final TripMapper tripMapper;
+    private final RouteRepository routeRepository;
+    private final VehicleRepository vehicleRepository;
+    private final DriverRepository driverRepository;
 
     public List<Trip> getAllTrips() {
         return tripRepository.findAll();
@@ -87,4 +98,93 @@ public class TripService implements ITripService {
             throw new BadRequestException("Trip does not exist or status has not changed");
         }
     }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Page<TripDetailedResponseDTO> getTripsByFilters(
+            String status,
+            LocalDate date,
+            Pageable pageable
+    ) {
+        Page<Trip> page;
+
+        boolean hasStatus = StringUtils.hasText(status);
+        boolean hasDate = date != null;
+
+        if (hasStatus && hasDate) {
+            LocalDateTime start = date.atStartOfDay();
+            LocalDateTime end = date.atTime(LocalTime.MAX);
+            page = tripRepository.findByStatusAndDepartureTimeBetween(
+                    status, start, end, pageable
+            );
+
+        } else if (hasStatus) {
+            page = tripRepository.findByStatus(status, pageable);
+
+        } else if (hasDate) {
+            LocalDateTime start = date.atStartOfDay();
+            LocalDateTime end = date.atTime(LocalTime.MAX);
+            page = tripRepository.findByDepartureTimeBetween(
+                    start, end, pageable
+            );
+
+        } else {
+            page = tripRepository.findAll(pageable);
+        }
+
+        return page.map(tripMapper::toDetailedDTO);
+    }
+
+    @Override
+    @Transactional
+    public TripDetailedResponseDTO createTrip(TripCreateRequestDTO request) {
+        // 1. Validate & Fetch Route
+        Route route = routeRepository.findById(request.getRouteId())
+                .orElseThrow(() -> new ResourceNotFoundException("Route not found with id: " + request.getRouteId()));
+
+        // 2. Validate & Fetch Vehicle
+        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found with id: " + request.getVehicleId()));
+
+        // 3. Validate & Fetch Driver
+        Driver driver = driverRepository.findById(request.getDriverId())
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + request.getDriverId()));
+
+        // 4. Tính toán thời gian
+        LocalDateTime departureDateTime = LocalDateTime.of(request.getDate(), request.getDepartureTime());
+
+        // LƯU Ý: Tính thời gian đến (ArrivalTime).
+        // Giả sử Entity Route có trường 'duration' (số giờ hoặc phút).
+        // Nếu Route không có duration, bạn cần thêm vào hoặc tạm thời hard-code cộng giờ.
+        // Ví dụ dưới đây giả định Route có getDuration() trả về double (số giờ) hoặc hardcode 5 tiếng.
+        long durationInHours = 5; // Hoặc: (long) route.getDuration();
+        LocalDateTime arrivalDateTime = departureDateTime.plusHours(durationInHours);
+
+        // 5. Map dữ liệu vào Entity
+        Trip trip = new Trip();
+        trip.setRoute(route);
+        trip.setVehicle(vehicle);
+        trip.setDriver(driver);
+        trip.setDepartureTime(departureDateTime);
+        trip.setArrivalTime(arrivalDateTime);
+        trip.setBasePrice(request.getPrice());
+
+        // Set Default Values
+        trip.setStatus("Waiting");
+        trip.setOnlineBookingCutoff(60); // Mặc định 60 phút
+        trip.setIsFullyBooked(false);
+        trip.setMinPassengers(1);
+        trip.setAutoCancelIfNotEnough(false);
+
+        // Nếu muốn set người tạo (Lấy từ SecurityContext)
+        // User currentUser = ... logic lấy user đang login ...
+        // trip.setCreatedBy(currentUser);
+
+        // 6. Lưu xuống DB
+        Trip savedTrip = tripRepository.save(trip);
+
+        // 7. Trả về DTO
+        return tripMapper.toDetailedDTO(savedTrip);
+    }
+
 }

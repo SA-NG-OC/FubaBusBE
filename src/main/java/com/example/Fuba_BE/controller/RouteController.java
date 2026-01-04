@@ -2,6 +2,7 @@ package com.example.Fuba_BE.controller;
 
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+import com.example.Fuba_BE.dto.Routes.RouteSelectionDTO;
 import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Route.IRouteService;
@@ -47,6 +48,10 @@ public class RouteController {
         );
     }
 
+    @GetMapping("/selection")
+    public ResponseEntity<List<RouteSelectionDTO>> getRoutesForSelection() {
+        return ResponseEntity.ok(routeService.getAllRoutesForSelection());
+    }
 
     // Create
     @PostMapping

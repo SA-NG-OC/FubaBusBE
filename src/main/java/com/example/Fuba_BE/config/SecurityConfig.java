@@ -32,6 +32,8 @@ public class SecurityConfig {
                                 "/api/trips/seats/**",
                                 "/trips/**",
                                 "/locations/**",
+                                "/vehicle/**",
+                                "/driver/**",
                                 // WebSocket endpoints
                                 "/ws/**",
                                 "/ws",

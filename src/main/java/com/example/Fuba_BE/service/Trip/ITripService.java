@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.service.Trip;
 
 import com.example.Fuba_BE.dto.Trip.TripCalendarDTO;
+import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,5 +15,10 @@ public interface ITripService {
     List<TripDetailedResponseDTO> getTripsDetailsByDate(LocalDate date);
     Page<TripDetailedResponseDTO> getTripsByStatus(String status, Pageable pageable);
     void updateTripStatus(Integer tripId, String status);
-
+    Page<TripDetailedResponseDTO> getTripsByFilters(
+            String status,
+            LocalDate date,
+            Pageable pageable
+    );
+    TripDetailedResponseDTO createTrip(TripCreateRequestDTO request);
 }
