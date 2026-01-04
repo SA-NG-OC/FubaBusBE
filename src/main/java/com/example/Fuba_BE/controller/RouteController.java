@@ -2,6 +2,7 @@ package com.example.Fuba_BE.controller;
 
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Route.IRouteService;
 import jakarta.validation.Valid;
@@ -75,6 +76,16 @@ public class RouteController {
         routeService.deleteRoute(id);
         return ResponseEntity.ok(
                 new ApiResponse<>(true, "Route deleted successfully", null)
+        );
+    }
+
+    //Get RouteStop
+    @GetMapping("/route-stop")
+    public ResponseEntity<ApiResponse<List<RouteStopResponseDTO>>> getRouteStop()
+    {
+        List<RouteStopResponseDTO> result = routeService.getAllRouteStop();
+        return ResponseEntity.ok(
+                new ApiResponse<>(true, "RouteStop fetched successfully", result)
         );
     }
 }

@@ -14,11 +14,11 @@ public class RouteRequestDTO {
     @NotBlank(message = "Tên tuyến không được để trống")
     private String routeName;
 
-    @NotNull(message = "Điểm đi không được để trống")
-    private Integer originId; // ID của Location (Start Point)
+    @NotBlank(message = "Tên điểm đi không được để trống")
+    private String originName; // Đổi từ ID sang Name
 
-    @NotNull(message = "Điểm đến không được để trống")
-    private Integer destinationId; // ID của Location (End Point)
+    @NotBlank(message = "Tên điểm đến không được để trống")
+    private String destinationName; // Đổi từ ID sang Name
 
     @NotNull(message = "Khoảng cách không được để trống")
     @Min(value = 1, message = "Khoảng cách phải lớn hơn 0")
@@ -26,8 +26,8 @@ public class RouteRequestDTO {
 
     @NotNull(message = "Thời gian ước tính không được để trống")
     @Min(value = 1, message = "Thời gian phải lớn hơn 0 phút")
-    private Integer estimatedDuration; // Nhận vào số phút (Ví dụ: 6h -> 360)
+    private Integer estimatedDuration;
 
-    // Danh sách ID các trạm dừng ở giữa (như Bien Hoa, Di Linh)
-    private List<Integer> intermediateStopIds;
+    // Danh sách TÊN các trạm dừng ở giữa
+    private List<String> intermediateStopNames; // Đổi từ List<Integer> sang List<String>
 }

@@ -7,7 +7,10 @@ import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
+import org.flywaydb.core.internal.util.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,5 +59,32 @@ public class TripService implements ITripService {
         return trips.stream()
                 .map(tripMapper::toDetailedDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Page<TripDetailedResponseDTO> getTripsByStatus(String status, Pageable pageable) {
+
+        Page<Trip> page;
+
+        if (!StringUtils.hasText(status)) {
+            // Không có status → lấy tất cả
+            page = tripRepository.findAll(pageable);
+        } else {
+            page = tripRepository.findByStatus(status, pageable);
+        }
+
+        return page.map(tripMapper::toDetailedDTO);
+    }
+
+    @Transactional
+    @Override
+    public void updateTripStatus(Integer tripId, String status) {
+
+        int updated = tripRepository.updateStatus(tripId, status);
+
+        if (updated == 0) {
+            throw new BadRequestException("Trip does not exist or status has not changed");
+        }
     }
 }

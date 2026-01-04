@@ -3,9 +3,9 @@ package com.example.Fuba_BE.service.Route;
 import com.example.Fuba_BE.domain.entity.Location;
 import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.domain.entity.RouteStop;
-import com.example.Fuba_BE.domain.enums.StopType;
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.RouteMapper;
@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,27 +32,44 @@ public class RouteService implements IRouteService {
     private final LocationRepository locationRepository;
     private final RouteMapper routeMapper;
 
+    // --- Helper: Tìm Location theo tên chính xác ---
+    private Location getLocationByName(String locationName) {
+        return locationRepository.findByLocationName(locationName)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa điểm với tên: " + locationName));
+    }
+
     // ================= CREATE =================
     @Override
     public RouteResponseDTO createRoute(RouteRequestDTO request) {
 
+        // 1. Validate logic nghiệp vụ
         validateRouteRequest(request);
 
+        // 2. Map dữ liệu cơ bản từ DTO sang Entity
         Route route = routeMapper.toEntity(request);
 
-        Location origin = getLocationById(request.getOriginId());
-        Location destination = getLocationById(request.getDestinationId());
+        // 3. Tìm Location Entity dựa trên tên
+        Location origin = getLocationByName(request.getOriginName());
+        Location destination = getLocationByName(request.getDestinationName());
 
+        // 4. Gán Location vào Route
         route.setOrigin(origin);
         route.setDestination(destination);
 
+        // Gán trạng thái mặc định
+        if (route.getStatus() == null) {
+            route.setStatus("Hoạt động");
+        }
+
+        // 5. Lưu Route
         Route savedRoute = routeRepository.save(route);
 
+        // 6. Tạo các trạm dừng (RouteStops)
         createRouteStops(
                 savedRoute,
                 origin,
                 destination,
-                request.getIntermediateStopIds()
+                request.getIntermediateStopNames()
         );
 
         return enrichRouteResponse(savedRoute);
@@ -68,26 +86,30 @@ public class RouteService implements IRouteService {
                         new ResourceNotFoundException("Route not found with id: " + routeId)
                 );
 
+        // Update các field cơ bản
         routeMapper.updateEntityFromDto(request, route);
 
-        Location origin = getLocationById(request.getOriginId());
-        Location destination = getLocationById(request.getDestinationId());
+        // Tìm Location mới theo tên
+        Location origin = getLocationByName(request.getOriginName());
+        Location destination = getLocationByName(request.getDestinationName());
 
         route.setOrigin(origin);
         route.setDestination(destination);
 
         Route updatedRoute = routeRepository.save(route);
 
+        // Xóa các trạm dừng cũ
         routeStopRepository.deleteAll(
                 routeStopRepository.findByRoute_RouteIdOrderByStopOrderAsc(routeId)
         );
-        routeStopRepository.flush();
+        routeStopRepository.flush(); // Đẩy lệnh xóa xuống DB ngay lập tức để tránh lỗi Unique index nếu có
 
+        // Tạo lại các trạm dừng mới
         createRouteStops(
                 updatedRoute,
                 origin,
                 destination,
-                request.getIntermediateStopIds()
+                request.getIntermediateStopNames()
         );
 
         return enrichRouteResponse(updatedRoute);
@@ -96,101 +118,127 @@ public class RouteService implements IRouteService {
     // ================= DELETE =================
     @Override
     public void deleteRoute(Integer routeId) {
-
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Route not found with id: " + routeId)
                 );
-
         routeRepository.delete(route);
     }
 
-    // ================= GET ALL =================
+    // ================= GET ALL & SEARCH =================
     @Override
     public Page<RouteResponseDTO> getAllRoutesForUI(Pageable pageable) {
         return routeRepository.findAll(pageable)
                 .map(this::enrichRouteResponse);
     }
 
-    // ================= SEARCH =================
     @Override
     public Page<RouteResponseDTO> searchRoutes(String keyword, Pageable pageable) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return getAllRoutesForUI(pageable);
         }
-
         return routeRepository
                 .searchRoutes(keyword.trim(), pageable)
                 .map(this::enrichRouteResponse);
     }
 
-    // ================= HELPER =================
+    @Override
+    public List<RouteStopResponseDTO> getAllRouteStop() {
+        return routeStopRepository.findAllRouteStopBasic();
+    }
 
+    // ================= PRIVATE HELPER METHODS =================
+
+    // Validate dựa trên Tên thay vì ID
     private void validateRouteRequest(RouteRequestDTO request) {
-
-        if (request.getOriginId() == null || request.getDestinationId() == null) {
-            throw new BadRequestException("Origin and destination must not be null");
+        if (request.getOriginName() == null || request.getDestinationName() == null) {
+            throw new BadRequestException("Điểm đi và điểm đến không được để trống");
         }
 
-        if (request.getOriginId().equals(request.getDestinationId())) {
-            throw new BadRequestException("Origin and destination must not be the same");
+        if (request.getOriginName().equalsIgnoreCase(request.getDestinationName())) {
+            throw new BadRequestException("Điểm đi và điểm đến không được trùng nhau");
         }
     }
 
-    private Location getLocationById(Integer id) {
-        return locationRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException("Location not found with id: " + id)
-                );
-    }
+    // Hàm tạo danh sách trạm dừng chi tiết
+    private void createRouteStops(Route route, Location origin, Location destination, List<String> intermediateStopNames) {
 
-    private void createRouteStops(
-            Route route,
-            Location origin,
-            Location destination,
-            List<Integer> intermediateStopIds
-    ) {
+        int orderCounter = 1;
 
-        int order = 1;
+        // 1. Tạo điểm đầu (Start Point)
+        RouteStop startStop = new RouteStop();
+        startStop.setRoute(route);
+        startStop.setLocation(origin);
+        startStop.setStopOrder(orderCounter++);
+        startStop.setStopType("ORIGIN");
+        startStop.setStopName(origin.getLocationName());
+        startStop.setStopAddress(origin.getAddress());
+        startStop.setLatitude(origin.getLatitude());
+        startStop.setLongitude(origin.getLongitude());
+        startStop.setIsPickupPoint(true);  // Điểm đầu chỉ đón
+        startStop.setIsDropoffPoint(false);
+        startStop.setDistanceFromOrigin(BigDecimal.ZERO);
+        startStop.setEstimatedTime(0);
 
-        saveStop(route, origin, order++, StopType.ORIGIN);
+        routeStopRepository.save(startStop);
 
-        if (intermediateStopIds != null && !intermediateStopIds.isEmpty()) {
-            for (Integer stopId : intermediateStopIds) {
-                saveStop(
-                        route,
-                        getLocationById(stopId),
-                        order++,
-                        StopType.INTERMEDIATE
-                );
+        // 2. Tạo các điểm giữa (Intermediate Stops)
+        if (intermediateStopNames != null && !intermediateStopNames.isEmpty()) {
+
+            for (String stopName : intermediateStopNames) {
+
+                // Chuẩn hóa
+                String normalized = stopName.trim().toLowerCase();
+
+                // BỎ QUA nếu trùng origin hoặc destination
+                if (normalized.equals(origin.getLocationName().trim().toLowerCase()) ||
+                        normalized.equals(destination.getLocationName().trim().toLowerCase())) {
+                    continue;
+                }
+
+                Location loc = getLocationByName(stopName);
+
+                RouteStop stop = new RouteStop();
+                stop.setRoute(route);
+                stop.setLocation(loc);
+                stop.setStopOrder(orderCounter++);
+                stop.setStopType("INTERMEDIATE");
+                stop.setStopName(loc.getLocationName());
+                stop.setStopAddress(loc.getAddress());
+                stop.setLatitude(loc.getLatitude());
+                stop.setLongitude(loc.getLongitude());
+                stop.setIsPickupPoint(true);
+                stop.setIsDropoffPoint(true);
+                stop.setDistanceFromOrigin(BigDecimal.ZERO);
+                stop.setEstimatedTime(0);
+
+                routeStopRepository.save(stop);
             }
         }
 
-        saveStop(route, destination, order, StopType.DESTINATION);
+        // 3. Tạo điểm cuối (End Point)
+        RouteStop endStop = new RouteStop();
+        endStop.setRoute(route);
+        endStop.setLocation(destination);
+        endStop.setStopOrder(orderCounter);
+        endStop.setStopType("DESTINATION");
+        endStop.setStopName(destination.getLocationName());
+        endStop.setStopAddress(destination.getAddress());
+        endStop.setLatitude(destination.getLatitude());
+        endStop.setLongitude(destination.getLongitude());
+        endStop.setIsPickupPoint(false);
+        endStop.setIsDropoffPoint(true); // Điểm cuối chỉ trả
+        endStop.setDistanceFromOrigin(route.getDistance());
+        endStop.setEstimatedTime(route.getEstimatedDuration());
+
+        routeStopRepository.save(endStop);
     }
 
-    private void saveStop(
-            Route route,
-            Location location,
-            int order,
-            StopType type
-    ) {
-
-        RouteStop stop = new RouteStop();
-        stop.setRoute(route);
-        stop.setLocation(location);
-        stop.setStopOrder(order);
-        stop.setStopType(type.dbValue());
-
-        routeStopRepository.save(stop);
-    }
-
+    // Map Entity sang Response DTO kèm danh sách tên trạm dừng
     private RouteResponseDTO enrichRouteResponse(Route route) {
-
         RouteResponseDTO dto = routeMapper.toResponseDTO(route);
 
-        List<RouteStop> stops =
-                routeStopRepository.findByRoute_RouteIdOrderByStopOrderAsc(route.getRouteId());
+        List<RouteStop> stops = routeStopRepository.findByRoute_RouteIdOrderByStopOrderAsc(route.getRouteId());
 
         dto.setStopNames(
                 stops.stream()
@@ -199,7 +247,6 @@ public class RouteService implements IRouteService {
         );
 
         dto.setTotalStops(stops.size());
-
         return dto;
     }
 }

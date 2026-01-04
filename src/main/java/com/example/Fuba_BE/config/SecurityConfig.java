@@ -31,6 +31,7 @@ public class SecurityConfig {
                                 "/routes/**",// Các API công khai khác
                                 "/api/trips/seats/**",
                                 "/trips/**",
+                                "/locations/**",
                                 // WebSocket endpoints
                                 "/ws/**",
                                 "/ws",

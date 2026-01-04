@@ -2,6 +2,7 @@ package com.example.Fuba_BE.service.Route;
 
 import com.example.Fuba_BE.dto.Routes.RouteRequestDTO;
 import com.example.Fuba_BE.dto.Routes.RouteResponseDTO;
+import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,6 +15,8 @@ public interface IRouteService {
     RouteResponseDTO updateRoute(Integer routeId, RouteRequestDTO request);
 
     void deleteRoute(Integer routeId);
+
+    List<RouteStopResponseDTO> getAllRouteStop();
 
     Page<RouteResponseDTO> getAllRoutesForUI(Pageable pageable);
 

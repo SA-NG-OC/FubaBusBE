@@ -10,9 +10,9 @@ public class RouteResponseDTO {
     private String routeName;
     private String originName;
     private String destinationName;
-    private BigDecimal distance; // 308 km
-    private String estimatedTime; // "6h" hoặc "2h 30m"
-    private int totalStops; // 2 stops
-    private List<String> stopNames; // ["Ho Chi Minh City", "Bien Hoa", "Di Linh", "Da Lat"]
-    private String status; // "Active" / "Hoạt động"
+    private BigDecimal distance;       // 308 km
+    private Integer estimatedDuration;  // số phút (ví dụ: 360)
+    private int totalStops;
+    private List<String> stopNames;
+    private String status;
 }

@@ -1,7 +1,10 @@
 package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.Trip;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -30,4 +33,13 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
             "ORDER BY t.departureTime ASC")
     List<Trip> findAllTripsByDate(@Param("startOfDay") LocalDateTime startOfDay,
                                   @Param("endOfDay") LocalDateTime endOfDay);
+
+    Page<Trip> findByStatus(String status, Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE Trip t SET t.status = :status WHERE t.id = :tripId")
+    int updateStatus(
+            @Param("tripId") Integer tripId,
+            @Param("status") String status
+    );
 }
