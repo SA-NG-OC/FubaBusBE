@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "trips")
@@ -41,7 +42,7 @@ public class Trip {
     private BigDecimal basePrice;
 
     @Column(name = "status")
-    private String status = "Chờ";
+    private String status = "Waiting";
 
     @Column(name = "statusnote", columnDefinition = "TEXT")
     private String statusNote;
@@ -67,6 +68,9 @@ public class Trip {
 
     @Column(name = "updatedat")
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "trip", fetch = FetchType.LAZY)
+    private List<TripSeat> tripSeats;
 
     @PrePersist
     protected void onCreate() {

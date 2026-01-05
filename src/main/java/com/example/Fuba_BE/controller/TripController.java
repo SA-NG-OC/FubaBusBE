@@ -3,6 +3,7 @@ package com.example.Fuba_BE.controller;
 import java.time.LocalDate;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -32,8 +33,8 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/trips")
 @RequiredArgsConstructor
 public class TripController {
-    
-    private final ITripService tripService;
+    @Autowired
+    private ITripService tripService;
 
     @GetMapping
         public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getTrips(

@@ -13,23 +13,41 @@ import java.util.List;
 @Repository
 public interface RouteRepository extends JpaRepository<Route, Integer> {
 
-    @Query("""
+    @Query(value = """
         SELECT DISTINCT r
+        FROM Route r
+        LEFT JOIN FETCH r.origin o
+        LEFT JOIN FETCH r.destination d
+        LEFT JOIN r.routeStops rs
+        LEFT JOIN rs.location l
+        WHERE
+            (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+    """,
+            countQuery = """
+        SELECT count(DISTINCT r)
         FROM Route r
         LEFT JOIN r.origin o
         LEFT JOIN r.destination d
         LEFT JOIN r.routeStops rs
         LEFT JOIN rs.location l
         WHERE
-            LOWER(r.routeName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-            OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+            (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
     """)
     Page<Route> searchRoutes(
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    @Override
+    @Query(value = "SELECT r FROM Route r LEFT JOIN FETCH r.origin LEFT JOIN FETCH r.destination",
+            countQuery = "SELECT count(r) FROM Route r")
+    Page<Route> findAll(Pageable pageable);
 
     List<Route> findByStatus(String status);
 }
