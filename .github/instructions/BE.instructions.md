@@ -10,7 +10,6 @@ Provide project context and coding guidelines that AI should follow when generat
 - [ ] Tất cả methods trả về `ResponseEntity<ApiResponse<T>>`
 - [ ] Đối với GET requests, sử dụng `@GetMapping` + `@RequestParam` cho filters/pagination và luôn dùng pagination mặc định không truyền sẽ trả về 20 items 
 - [ ] Dùng `@Valid` cho request body
-- [ ] Thêm Swagger annotations (`@Tag`, `@Operation`, `@ApiResponse`)
 - [ ] Không có business logic trong controller
 - [ ] Không gọi Repository trực tiếp
 
