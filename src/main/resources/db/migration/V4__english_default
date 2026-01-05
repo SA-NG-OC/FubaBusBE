@@ -1,0 +1,19 @@
+-- 1. Xóa ràng buộc cũ (Postgres thường đặt tên mặc định là trips_status_check)
+ALTER TABLE public.trips DROP CONSTRAINT IF EXISTS trips_status_check;
+
+-- 2. Cập nhật dữ liệu cũ sang Tiếng Anh
+UPDATE public.trips
+SET status = CASE
+    WHEN status = 'Chờ' THEN 'Waiting'
+    WHEN status = 'Đang chạy' THEN 'Running'
+    WHEN status = 'Hoãn' THEN 'Delayed'
+    WHEN status = 'Hoàn thành' THEN 'Completed'
+    WHEN status = 'Hủy' THEN 'Cancelled'
+    ELSE 'Waiting' -- Giá trị mặc định nếu không khớp
+END;
+
+-- 3. Đặt lại giá trị mặc định và thêm ràng buộc mới
+ALTER TABLE public.trips
+    ALTER COLUMN status SET DEFAULT 'Waiting',
+    ADD CONSTRAINT trips_status_check
+    CHECK (status IN ('Waiting', 'Running', 'Delayed', 'Completed', 'Cancelled'));

@@ -34,6 +34,7 @@ public class SecurityConfig {
                                 "/locations/**",
                                 "/vehicle/**",
                                 "/driver/**",
+                                "/dashboard/**",
                                 // WebSocket endpoints
                                 "/ws/**",
                                 "/ws",

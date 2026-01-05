@@ -29,12 +29,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TripController {
     @Autowired
-    private ITripService tripService; // Gọi ông Quản lý ra để chờ lệnh
+    private ITripService tripService;
 
     @GetMapping("")
     public Page<TripDetailedResponseDTO> getTrips(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date, // Thêm dòng này
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @PageableDefault(
                     page = 0,
                     size = 10,
@@ -42,7 +42,6 @@ public class TripController {
                     direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
-        // Truyền cả status và date xuống service
         return tripService.getTripsByFilters(status, date, pageable);
     }
 
