@@ -1,61 +1,88 @@
 package com.example.Fuba_BE.exception;
 
-import com.example.Fuba_BE.payload.ApiResponse;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.example.Fuba_BE.payload.ApiResponse;
+
+import lombok.extern.slf4j.Slf4j;
+
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
-    // Bắt toàn bộ AppException
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<String>> handleAppException(AppException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
+        log.warn("AppException: {}", ex.getMessage());
         return ResponseEntity
                 .status(ex.getStatus())
-                .body(new ApiResponse<>(false, ex.getMessage(), null));
+                .body(ApiResponse.error(ex.getMessage(), ex.getStatus().name()));
     }
 
-//     // Lỗi không xác định → 500
-//     @ExceptionHandler(Exception.class)
-//     public ResponseEntity<ApiResponse<String>> handleGlobalException(Exception ex) {
-//         return ResponseEntity
-//                 .internalServerError()
-//                 .body(new ApiResponse<>(false, "Internal Server Error", null));
     @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<?> handleNotFound(NotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
-                "success", false,
-                "timestamp", LocalDateTime.now().toString(),
-                "status", 404,
-                "error", "NOT_FOUND",
-                "message", ex.getMessage()
-        ));
+    public ResponseEntity<ApiResponse<Void>> handleNotFoundException(NotFoundException ex) {
+        log.warn("Not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage(), "NOT_FOUND"));
     }
 
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<?> handleBadRequest(BadRequestException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "timestamp", LocalDateTime.now().toString(),
-                "status", 400,
-                "error", "BAD_REQUEST",
-                "message", ex.getMessage()
-        ));
+    public ResponseEntity<ApiResponse<Void>> handleBadRequestException(BadRequestException ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage(), "BAD_REQUEST"));
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorizedException(UnauthorizedException ex) {
+        log.warn("Unauthorized: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage(), "UNAUTHORIZED"));
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbiddenException(ForbiddenException ex) {
+        log.warn("Forbidden: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage(), "FORBIDDEN"));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationErrors(
+            MethodArgumentNotValidException ex
+    ) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+        
+        log.warn("Validation errors: {}", errors);
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error("Validation failed", errors, "VALIDATION_ERROR"));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleUnknown(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "timestamp", LocalDateTime.now().toString(),
-                "status", 500,
-                "error", "INTERNAL_SERVER_ERROR",
-                "message", ex.getMessage()
-        ));
+    public ResponseEntity<ApiResponse<Void>> handleGlobalException(Exception ex) {
+        log.error("Unexpected error", ex);
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(
+                        "An unexpected error occurred. Please contact support.",
+                        "INTERNAL_SERVER_ERROR"
+                ));
     }
 }
