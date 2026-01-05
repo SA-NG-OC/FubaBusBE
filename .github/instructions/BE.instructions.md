@@ -8,6 +8,7 @@ Provide project context and coding guidelines that AI should follow when generat
 - [ ] Sử dụng đường dẫn API không có phiên bản (ví dụ: `/trips` thay vì `/api/v1/trips`)
 - [ ] Constructor injection với `private final` + `@RequiredArgsConstructor`
 - [ ] Tất cả methods trả về `ResponseEntity<ApiResponse<T>>`
+- [ ] Đối với GET requests, sử dụng `@GetMapping` + `@RequestParam` cho filters/pagination và luôn dùng pagination mặc định không truyền sẽ trả về 20 items 
 - [ ] Dùng `@Valid` cho request body
 - [ ] Thêm Swagger annotations (`@Tag`, `@Operation`, `@ApiResponse`)
 - [ ] Không có business logic trong controller
@@ -36,15 +37,18 @@ Provide project context and coding guidelines that AI should follow when generat
 
 ### **DTO:**
 - [ ] Validation annotations (`@NotNull`, `@Size`, `@Email`, etc.)
-- [ ] Swagger schema annotations (`@Schema`)
 - [ ] Flat structure (không nested entities)
 - [ ] Separate RequestDTO và ResponseDTO
+- [ ] service trả về entity không trả về dto
+- [ ] dto được và mapper thuộc tầng controller
 
 ### **Mapper:**
 - [ ] `@Mapper(componentModel = "spring")`
 - [ ] `@Mapping` cho complex conversions
 - [ ] Helper methods cho custom logic
 - [ ] Handle null-safe operations
+- [ ] luôn sử dụng Mapper để convert Entity ↔ DTO
+- [ ] mapper sẽ map khi map sang DTO cho những field trả ra ở controller và map ngược lại khi nhận request từ controller
 
 ### **Exception Handling:**
 - [ ] Custom exceptions extend `AppException`
