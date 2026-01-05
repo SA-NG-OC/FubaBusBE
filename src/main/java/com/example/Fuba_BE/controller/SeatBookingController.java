@@ -4,7 +4,6 @@ import com.example.Fuba_BE.dto.seat.SeatBookingConfirmRequest;
 import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.SeatLockService;
-import io.swagger.v3.oas.annotations.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -48,7 +47,6 @@ public class SeatBookingController {
      * @return ApiResponse with booking result
      */
     @PostMapping("/confirm-booking")
-    @Operation(summary = "Confirm seat booking", description = "Confirm booking after successful payment")
     public ResponseEntity<ApiResponse<SeatStatusMessage>> confirmBooking(
             @RequestBody SeatBookingConfirmRequest request) {
         
