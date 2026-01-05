@@ -4,6 +4,7 @@ import com.example.Fuba_BE.dto.seat.SeatBookingConfirmRequest;
 import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.SeatLockService;
+import io.swagger.v3.oas.annotations.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +48,7 @@ public class SeatBookingController {
      * @return ApiResponse with booking result
      */
     @PostMapping("/confirm-booking")
+    @Operation(summary = "Confirm seat booking", description = "Confirm booking after successful payment")
     public ResponseEntity<ApiResponse<SeatStatusMessage>> confirmBooking(
             @RequestBody SeatBookingConfirmRequest request) {
         
@@ -56,7 +58,7 @@ public class SeatBookingController {
         // Validate request
         if (request.getSeatId() == null || request.getTripId() == null || request.getUserId() == null) {
             return ResponseEntity.badRequest().body(
-                    new ApiResponse<>(false, "seatId, tripId, and userId are required", null)
+                    ApiResponse.error("seatId, tripId, and userId are required", "BAD_REQUEST")
             );
         }
         
@@ -73,13 +75,11 @@ public class SeatBookingController {
             messagingTemplate.convertAndSend(destination, result);
             logger.info("Booking confirmed and broadcasted to {}", destination);
             
-            return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Booking confirmed successfully", result)
-            );
+            return ResponseEntity.ok(ApiResponse.success("Booking confirmed successfully", result));
         } else {
             logger.warn("Booking failed: {}", result.getMessage());
             return ResponseEntity.badRequest().body(
-                    new ApiResponse<>(false, result.getMessage(), result)
+                    ApiResponse.error(result.getMessage(), result, "BOOKING_FAILED")
             );
         }
     }
@@ -112,11 +112,11 @@ public class SeatBookingController {
             messagingTemplate.convertAndSend(destination, result);
             
             return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Lock released successfully", result)
+                    ApiResponse.success("Lock released successfully", result)
             );
         } else {
             return ResponseEntity.badRequest().body(
-                    new ApiResponse<>(false, result.getMessage(), result)
+                    ApiResponse.error(result.getMessage(), result, "LOCK_RELEASE_FAILED")
             );
         }
     }
@@ -142,7 +142,7 @@ public class SeatBookingController {
         
         if (request.getTripId() == null || request.getUserId() == null) {
             return ResponseEntity.badRequest().body(
-                    new ApiResponse<>(false, "tripId and userId are required", null)
+                    ApiResponse.error("tripId and userId are required", "BAD_REQUEST")
             );
         }
         
@@ -156,11 +156,11 @@ public class SeatBookingController {
             messagingTemplate.convertAndSend(destination, result);
             
             return ResponseEntity.ok(
-                    new ApiResponse<>(true, "Seat locked successfully", result)
+                    ApiResponse.success("Seat locked successfully", result)
             );
         } else {
             return ResponseEntity.badRequest().body(
-                    new ApiResponse<>(false, result.getMessage(), result)
+                    ApiResponse.error(result.getMessage(), result, "LOCK_FAILED")
             );
         }
     }

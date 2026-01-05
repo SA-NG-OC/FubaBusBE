@@ -52,14 +52,11 @@ public class TripService implements ITripService {
             end = date.atTime(LocalTime.MAX);
         }
 
-        // Gọi 1 hàm duy nhất trong Repository - "Cân" mọi trường hợp
         Page<Trip> page = tripRepository.findTripsWithFilter(filterStatus, start, end, pageable);
 
-        // Map sang DTO (Lúc này data đã có sẵn trong RAM nhờ JOIN FETCH, không bị N+1 query)
         return page.map(tripMapper::toDetailedDTO);
     }
 
-    // Hàm này bản chất giống hệt filter chỉ có status -> Tái sử dụng hàm trên cho gọn
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getTripsByStatus(String status, Pageable pageable) {
@@ -74,7 +71,6 @@ public class TripService implements ITripService {
         return tripRepository.findDistinctTripDates(startDate.atStartOfDay(), endDate.atTime(LocalTime.MAX));
     }
 
-    // (Optional) Nếu bạn vẫn cần hàm lấy List (không phân trang) cho view cụ thể nào đó
     @Transactional(readOnly = true)
     public List<TripDetailedResponseDTO> getTripsDetailsByDate(LocalDate date) {
         List<Trip> trips = tripRepository.findAllTripsByDate(
@@ -86,8 +82,6 @@ public class TripService implements ITripService {
     public List<Trip> getAllTrips() {
         return tripRepository.findAll();
     }
-
-    // --- CÁC HÀM TÁC ĐỘNG DỮ LIỆU (WRITE) ---
 
     @Override
     @Transactional
@@ -102,7 +96,6 @@ public class TripService implements ITripService {
 
         // 2. Logic Thời gian
         LocalDateTime departureTime = LocalDateTime.of(request.getDate(), request.getDepartureTime());
-        // TODO: Lấy duration từ Route thực tế thay vì hardcode 5
         long durationHours = 5;
         LocalDateTime arrivalTime = departureTime.plusHours(durationHours);
 
