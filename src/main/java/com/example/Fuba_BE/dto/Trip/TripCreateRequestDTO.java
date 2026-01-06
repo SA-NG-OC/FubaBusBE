@@ -18,8 +18,10 @@ public class TripCreateRequestDTO {
     @NotNull(message = "Vehicle is required")
     private Integer vehicleId;
 
-    @NotNull(message = "Driver is required")
+    @NotNull(message = "Driver ID is required")
     private Integer driverId;
+
+    private Integer subDriverId;
 
     @NotNull(message = "Date is required")
     @FutureOrPresent(message = "Date must be today or in the future")

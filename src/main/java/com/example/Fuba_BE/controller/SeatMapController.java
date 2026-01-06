@@ -13,13 +13,9 @@ import com.example.Fuba_BE.dto.seat.SeatMapResponse;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.SeatMapService;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/trips")
-@Tag(name = "Seat Map Management", description = "APIs for managing seat maps")
 public class SeatMapController {
 
     private final SeatMapService seatMapService;
@@ -28,10 +24,8 @@ public class SeatMapController {
         this.seatMapService = seatMapService;
     }
 
-    @PostMapping("/{tripId}/seat-map/migrate")
-    @Operation(summary = "Migrate seat map", description = "Create or update seat map for a trip")
+        @PostMapping("/{tripId}/seat-map/migrate")
     public ResponseEntity<ApiResponse<SeatMapResponse>> migrateSeatMap(
-            @Parameter(description = "Trip ID", required = true)
             @PathVariable Integer tripId,
             
             @RequestBody(required = false) MigrateSeatMapRequest request
@@ -45,9 +39,7 @@ public class SeatMapController {
     }
 
     @GetMapping("/seats/{tripId}")
-    @Operation(summary = "Get seat map", description = "Retrieve seat map for a specific trip")
     public ResponseEntity<ApiResponse<SeatMapResponse>> getSeats(
-            @Parameter(description = "Trip ID", required = true)
             @PathVariable Integer tripId
     ) {
         SeatMapResponse seatMap = seatMapService.getSeatMap(tripId);
