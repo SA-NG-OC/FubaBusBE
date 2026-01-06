@@ -13,21 +13,20 @@ import java.util.List;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
-    // 1. Tính tổng doanh thu trong khoảng thời gian (Status: Paid, Completed)
     @Query("SELECT SUM(b.totalAmount) FROM Booking b " +
             "WHERE b.bookingStatus IN ('Paid', 'Completed') " +
             "AND b.createdAt BETWEEN :start AND :end")
     BigDecimal sumRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // 2. Query cho biểu đồ đường: Doanh thu theo tháng trong năm hiện tại
-    // Trả về: [Tháng (String - Jan, Feb...), Doanh thu (BigDecimal)]
+    // [THAY ĐỔI] Lấy doanh thu 12 tháng gần nhất (Rolling 12 months)
+    // Sắp xếp theo Năm-Tháng để biểu đồ hiển thị đúng thứ tự thời gian
     @Query(value = """
-        SELECT TO_CHAR(createdat, 'Mon'), SUM(totalamount)
+        SELECT TO_CHAR(createdat, 'Mon-YY'), SUM(totalamount)
         FROM bookings
         WHERE bookingstatus IN ('Paid', 'Completed')
-        AND EXTRACT(YEAR FROM createdat) = :year
-        GROUP BY TO_CHAR(createdat, 'Mon'), EXTRACT(MONTH FROM createdat)
-        ORDER BY EXTRACT(MONTH FROM createdat) ASC
+        AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+        GROUP BY TO_CHAR(createdat, 'Mon-YY'), DATE_TRUNC('month', createdat)
+        ORDER BY DATE_TRUNC('month', createdat) ASC
     """, nativeQuery = true)
-    List<Object[]> getRevenueTrends(@Param("year") int year);
+    List<Object[]> getRevenueLast12Months();
 }

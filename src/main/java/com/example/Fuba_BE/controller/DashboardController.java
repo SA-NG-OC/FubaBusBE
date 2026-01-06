@@ -41,13 +41,8 @@ public class DashboardController {
     // 2. API Biểu đồ
     @GetMapping("/charts")
     @Operation(summary = "Get chart data", description = "Retrieve data for revenue or trip charts by year")
-    public ResponseEntity<ApiResponse<DashboardChartDTO>> getCharts(
-            @RequestParam(required = false) Integer year
-    ) {
-        // Xử lý giá trị mặc định cho presentation layer
-        int targetYear = (year == null) ? Year.now().getValue() : year;
-
-        DashboardChartDTO charts = dashboardService.getDashboardCharts(targetYear);
+    public ResponseEntity<ApiResponse<DashboardChartDTO>> getCharts() {
+        DashboardChartDTO charts = dashboardService.getDashboardCharts();
         return ResponseEntity.ok(ApiResponse.success("Chart data retrieved successfully", charts));
     }
 

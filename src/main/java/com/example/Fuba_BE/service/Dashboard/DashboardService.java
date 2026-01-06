@@ -63,18 +63,23 @@ public class DashboardService implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public DashboardChartDTO getDashboardCharts(int year) {
-        // ... (Giữ nguyên logic Charts, đảm bảo đã có Index cho bookings.created_at)
-        List<Object[]> revenueData = bookingRepository.getRevenueTrends(year);
+    public DashboardChartDTO getDashboardCharts() {
+
+        // 1. Lấy Revenue 12 tháng gần nhất
+        List<Object[]> revenueData = bookingRepository.getRevenueLast12Months();
         List<DashboardChartDTO.ChartData> revenueChart = new ArrayList<>();
+
+        // Nếu database trả về rỗng (chưa có doanh thu), code vẫn chạy tốt vòng lặp này sẽ không chạy
         for (Object[] row : revenueData) {
             revenueChart.add(new DashboardChartDTO.ChartData((String) row[0], (BigDecimal) row[1]));
         }
 
+        // 2. Lấy Weekly Sales 7 ngày gần nhất
         List<Object[]> salesData = tripRepository.getWeeklyTicketSales();
         List<DashboardChartDTO.ChartData> salesChart = new ArrayList<>();
         for (Object[] row : salesData) {
-            salesChart.add(new DashboardChartDTO.ChartData((String) row[0], BigDecimal.valueOf((Long) row[1])));
+            BigDecimal countVal = (row[1] != null) ? BigDecimal.valueOf(((Number) row[1]).longValue()) : BigDecimal.ZERO;
+            salesChart.add(new DashboardChartDTO.ChartData((String) row[0], countVal));
         }
 
         return DashboardChartDTO.builder()

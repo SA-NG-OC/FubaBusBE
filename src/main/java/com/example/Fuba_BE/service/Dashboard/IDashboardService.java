@@ -13,7 +13,7 @@ public interface IDashboardService {
     DashboardStatsDTO getDashboardStats();
 
     // 2. Lấy dữ liệu biểu đồ
-    DashboardChartDTO getDashboardCharts(int year);
+    DashboardChartDTO getDashboardCharts();
 
     // 3. Lấy danh sách chuyến đi hôm nay (có phân trang)
     Page<DashboardTripDTO> getTodayTrips(LocalDate date, Pageable pageable);
