@@ -33,7 +33,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         GROUP BY TO_CHAR(createdat, 'Mon-YY'), DATE_TRUNC('month', createdat)
         ORDER BY DATE_TRUNC('month', createdat) ASC
     """, nativeQuery = true)
-    List<Object[]> getRevenueTrends(@Param("year") int year);
+    List<Object[]> getRevenueLast12Months();
 
     /**
      * Find booking by booking code
