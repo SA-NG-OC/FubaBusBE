@@ -12,6 +12,7 @@ public interface TripMapper {
     @Mapping(target = "routeName", expression = "java(formatRouteName(trip))")
     @Mapping(target = "vehicleInfo", expression = "java(formatVehicleInfo(trip))")
     @Mapping(source = "driver.user.fullName", target = "driverName")
+    @Mapping(source = "subDriver.user.fullName", target = "subDriverName")
     @Mapping(target = "date", expression = "java(trip.getDepartureTime().toLocalDate())")
     @Mapping(target = "departureTime", expression = "java(trip.getDepartureTime().toLocalTime())")
     @Mapping(source = "basePrice", target = "price")

@@ -4,9 +4,9 @@ package com.example.Fuba_BE.domain.enums;
  * Enum representing the possible statuses of a seat.
  */
 public enum SeatStatus {
-    AVAILABLE("Trống"),
-    LOCKED("Đang giữ"),
-    BOOKED("Đã đặt");
+    AVAILABLE("Available"),
+    LOCKED("Held"),
+    BOOKED("Booked");
 
     private final String displayName;
 
