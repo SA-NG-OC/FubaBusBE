@@ -33,7 +33,7 @@ public class Trip {
     private Driver driver; // Tài xế chính
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sub_driver_id")
+    @JoinColumn(name = "subdriverid")
     private Driver subDriver; // Phụ xe
 
     @Column(name = "departuretime", nullable = false)
