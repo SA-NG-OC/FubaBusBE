@@ -19,6 +19,7 @@ public interface TripSeatRepository extends JpaRepository<TripSeat, Integer> {
     boolean existsByTrip_TripId(Integer tripId);
 
     void deleteByTrip_TripId(Integer tripId);
+    boolean existsByTrip_TripIdAndStatus(Integer tripId, String status);
     
     /**
      * Find a seat by ID with pessimistic write lock (SELECT ... FOR UPDATE).

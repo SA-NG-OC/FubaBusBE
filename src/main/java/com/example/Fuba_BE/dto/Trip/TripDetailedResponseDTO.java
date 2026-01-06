@@ -17,7 +17,8 @@ public class TripDetailedResponseDTO {
     private Integer tripId;
     private String routeName;       // VD: HCM -> Da Lat
     private String vehicleInfo;     // VD: 51A-12345 (Sleeper)
-    private String driverName;      // VD: Nguyen Van A
+    private String driverName;
+    private String subDriverName;
     private LocalDate date;         // VD: 2025-11-20
     private LocalTime departureTime; // VD: 06:00
     private BigDecimal price;       // VD: 250000

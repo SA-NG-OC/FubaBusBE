@@ -45,11 +45,11 @@ public class TripSeat {
 
     @Column(name = "seattype")
     @Builder.Default
-    private String seatType = "Thường";
+    private String seatType = "Standard";
 
     @Column(name = "status")
     @Builder.Default
-    private String status = "Trống";
+    private String status = "Available";
 
     @Column(name = "holdexpiry")
     private LocalDateTime holdExpiry;
