@@ -39,7 +39,9 @@ public class SecurityConfig {
                                 "/ws/**",
                                 "/ws",
                                 // Seat locking REST endpoints
-                                "/api/seats/**"
+                                "/api/seats/**",
+                                // Booking endpoints
+                                "/bookings/**"
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -49,7 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         .anyRequest().permitAll()
-//                        .anyRequest().authenticated()
+//                       .anyRequest().authenticated()
                 );
 
         return http.build();

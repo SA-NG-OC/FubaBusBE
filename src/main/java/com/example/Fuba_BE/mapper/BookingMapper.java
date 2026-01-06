@@ -1,0 +1,181 @@
+package com.example.Fuba_BE.mapper;
+
+import com.example.Fuba_BE.domain.entity.*;
+import com.example.Fuba_BE.dto.Booking.BookingResponse;
+import com.example.Fuba_BE.repository.PassengerRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Mapper for converting Booking entities to DTOs.
+ * Uses manual mapping due to complex nested structures.
+ */
+@Component
+@RequiredArgsConstructor
+public class BookingMapper {
+
+    private final PassengerRepository passengerRepository;
+
+    /**
+     * Convert Booking entity to BookingResponse DTO
+     */
+    public BookingResponse toBookingResponse(Booking booking, Trip trip, List<Ticket> tickets) {
+        if (booking == null) {
+            return null;
+        }
+
+        return BookingResponse.builder()
+                .bookingId(booking.getBookingId())
+                .bookingCode(booking.getBookingCode())
+                .tripId(trip != null ? trip.getTripId() : null)
+                .tripInfo(toTripInfo(trip))
+                .customerName(booking.getCustomerName())
+                .customerPhone(booking.getCustomerPhone())
+                .customerEmail(booking.getCustomerEmail())
+                .totalAmount(booking.getTotalAmount())
+                .bookingStatus(booking.getBookingStatus())
+                .bookingType(booking.getBookingType())
+                .tickets(toTicketInfoList(tickets))
+                .createdAt(booking.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Convert Trip entity to TripInfo DTO
+     */
+    private BookingResponse.TripInfo toTripInfo(Trip trip) {
+        if (trip == null) {
+            return null;
+        }
+
+        return BookingResponse.TripInfo.builder()
+                .tripId(trip.getTripId())
+                .routeName(getRouteName(trip))
+                .departureTime(trip.getDepartureTime())
+                .arrivalTime(trip.getArrivalTime())
+                .vehiclePlate(getVehiclePlate(trip))
+                .driverName(getDriverName(trip))
+                .build();
+    }
+
+    /**
+     * Convert list of Ticket entities to TicketInfo DTOs
+     */
+    private List<BookingResponse.TicketInfo> toTicketInfoList(List<Ticket> tickets) {
+        if (tickets == null || tickets.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<BookingResponse.TicketInfo> ticketInfos = new ArrayList<>();
+        for (Ticket ticket : tickets) {
+            ticketInfos.add(toTicketInfo(ticket));
+        }
+        return ticketInfos;
+    }
+
+    /**
+     * Convert Ticket entity to TicketInfo DTO
+     */
+    private BookingResponse.TicketInfo toTicketInfo(Ticket ticket) {
+        if (ticket == null) {
+            return null;
+        }
+
+        TripSeat seat = ticket.getSeat();
+        
+        // Get passenger info if exists
+        BookingResponse.PassengerInfo passengerInfo = null;
+        try {
+            passengerRepository.findByTicket_TicketId(ticket.getTicketId())
+                    .ifPresent(passenger -> {
+                        // Can't directly assign in lambda, so we build here
+                    });
+            
+            var passengerOpt = passengerRepository.findByTicket_TicketId(ticket.getTicketId());
+            if (passengerOpt.isPresent()) {
+                passengerInfo = toPassengerInfo(passengerOpt.get());
+            }
+        } catch (Exception e) {
+            // Passenger info is optional
+        }
+
+        return BookingResponse.TicketInfo.builder()
+                .ticketId(ticket.getTicketId())
+                .ticketCode(ticket.getTicketCode())
+                .seatId(seat != null ? seat.getSeatId() : null)
+                .seatNumber(seat != null ? seat.getSeatNumber() : null)
+                .floorNumber(seat != null ? seat.getFloorNumber() : null)
+                .price(ticket.getPrice())
+                .ticketStatus(ticket.getTicketStatus())
+                .passenger(passengerInfo)
+                .build();
+    }
+
+    /**
+     * Convert Passenger entity to PassengerInfo DTO
+     */
+    private BookingResponse.PassengerInfo toPassengerInfo(Passenger passenger) {
+        if (passenger == null) {
+            return null;
+        }
+
+        return BookingResponse.PassengerInfo.builder()
+                .passengerId(passenger.getPassengerId())
+                .fullName(passenger.getFullName())
+                .phoneNumber(passenger.getPhoneNumber())
+                .email(passenger.getEmail())
+                .pickupAddress(getPickupAddress(passenger))
+                .dropoffAddress(getDropoffAddress(passenger))
+                .build();
+    }
+
+    // ==================== Helper Methods ====================
+
+    private String getRouteName(Trip trip) {
+        if (trip.getRoute() == null) {
+            return null;
+        }
+        return trip.getRoute().getRouteName();
+    }
+
+    private String getVehiclePlate(Trip trip) {
+        if (trip.getVehicle() == null) {
+            return null;
+        }
+        return trip.getVehicle().getLicensePlate();
+    }
+
+    private String getDriverName(Trip trip) {
+        if (trip.getDriver() == null) {
+            return null;
+        }
+        // Driver name is accessed through User relationship
+        if (trip.getDriver().getUser() != null) {
+            return trip.getDriver().getUser().getFullName();
+        }
+        return null;
+    }
+
+    private String getPickupAddress(Passenger passenger) {
+        if (passenger.getPickupAddress() != null) {
+            return passenger.getPickupAddress();
+        }
+        if (passenger.getPickupLocation() != null) {
+            return passenger.getPickupLocation().getStopName();
+        }
+        return null;
+    }
+
+    private String getDropoffAddress(Passenger passenger) {
+        if (passenger.getDropoffAddress() != null) {
+            return passenger.getDropoffAddress();
+        }
+        if (passenger.getDropoffLocation() != null) {
+            return passenger.getDropoffLocation().getStopName();
+        }
+        return null;
+    }
+}

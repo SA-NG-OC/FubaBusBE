@@ -48,7 +48,7 @@ public class TripTracking {
     private String delayReason;
 
     @Column(name = "trafficstatus")
-    private String trafficStatus = "Bình thường";
+    private String trafficStatus = "Normal";
 
     @Column(name = "recordedat")
     private LocalDateTime recordedAt;

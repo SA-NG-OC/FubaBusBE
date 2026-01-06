@@ -2,6 +2,7 @@ package com.example.Fuba_BE.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Passenger {
 
     @Id
@@ -24,6 +26,7 @@ public class Passenger {
     private Ticket ticket;
 
     @Column(name = "fullname", nullable = false)
+    @Builder.Default
     private String fullName = "Khách";
 
     @Column(name = "phonenumber")
@@ -53,12 +56,14 @@ public class Passenger {
     private String specialNote;
 
     @Column(name = "checkinstatus")
-    private String checkinStatus = "Chưa lên xe";
+    @Builder.Default
+    private String checkinStatus = "NotBoarded";
 
     @Column(name = "checkintime")
     private LocalDateTime checkinTime;
 
     @Column(name = "checkinmethod", nullable = false)
+    @Builder.Default
     private String checkinMethod = "QR";
 
     @Column(name = "checkouttime")

@@ -108,7 +108,7 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
         JOIN bookings b ON tk.bookingid = b.bookingid
         JOIN trips t ON b.tripid = t.tripid
         WHERE t.departuretime >= CURRENT_DATE - INTERVAL '7 days'
-        AND tk.ticketstatus IN ('Confirmed', 'Used')
+        AND tk.ticketstatus IN ('Confirmed', 'USED')
         GROUP BY TO_CHAR(t.departuretime, 'Dy'), DATE(t.departuretime)
         ORDER BY DATE(t.departuretime) ASC
     """, nativeQuery = true)

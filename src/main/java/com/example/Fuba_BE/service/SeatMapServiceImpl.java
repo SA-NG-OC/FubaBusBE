@@ -22,9 +22,9 @@ import java.util.stream.Collectors;
 public class SeatMapServiceImpl implements SeatMapService {
 
     // status chuẩn để FE dễ dùng (khớp domain string hiện tại)
-    private static final String STATUS_AVAILABLE = "Trống";
-    private static final String STATUS_LOCKED = "Đang giữ";
-    private static final String STATUS_BOOKED = "Đã đặt";
+    private static final String STATUS_AVAILABLE = "Available";
+    private static final String STATUS_LOCKED = "Held";
+    private static final String STATUS_BOOKED = "Booked";
 
     private final TripRepository tripRepository;
     private final TripSeatRepository tripSeatRepository;
@@ -136,7 +136,7 @@ public class SeatMapServiceImpl implements SeatMapService {
             s.setTrip(trip);
             s.setFloorNumber(floorNumber);
             s.setSeatNumber(prefix + i);     // A1..A20 / B1..B20
-            s.setSeatType("Thường");
+            s.setSeatType("Standard");
             s.setStatus(STATUS_AVAILABLE);
             s.setHoldExpiry(null);
             list.add(s);

@@ -1,19 +1,23 @@
 package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.Booking;
+import com.example.Fuba_BE.domain.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
-    // 1. Tính tổng doanh thu trong khoảng thời gian (Status: Paid, Completed)
+    // 1. Tính tổng doanh thu trong khoảng thời gian (Status: PAID, COMPLETED)
     @Query("SELECT SUM(b.totalAmount) FROM Booking b " +
             "WHERE b.bookingStatus IN ('Paid', 'Completed') " +
             "AND b.createdAt BETWEEN :start AND :end")
@@ -30,4 +34,66 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         ORDER BY EXTRACT(MONTH FROM createdat) ASC
     """, nativeQuery = true)
     List<Object[]> getRevenueTrends(@Param("year") int year);
+
+    /**
+     * Find booking by booking code
+     */
+    Optional<Booking> findByBookingCode(String bookingCode);
+
+    /**
+     * Find booking by ID with pessimistic lock
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.bookingId = :bookingId")
+    Optional<Booking> findByIdWithLock(@Param("bookingId") Integer bookingId);
+
+    /**
+     * Find all bookings for a customer
+     */
+    List<Booking> findByCustomer(User customer);
+
+    /**
+     * Find all bookings for a customer by customer ID
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerId(@Param("customerId") Integer customerId);
+
+    /**
+     * Find all bookings for a trip
+     */
+    @Query("SELECT b FROM Booking b WHERE b.trip.tripId = :tripId")
+    List<Booking> findByTripId(@Param("tripId") Integer tripId);
+
+    /**
+     * Find all bookings with status
+     */
+    List<Booking> findByBookingStatus(String bookingStatus);
+
+    /**
+     * Find guest booking by session ID
+     */
+    @Query("SELECT b FROM Booking b WHERE b.guestSessionId = :sessionId AND b.isGuestBooking = true")
+    List<Booking> findGuestBookingsBySessionId(@Param("sessionId") String sessionId);
+
+    /**
+     * Find booking by phone number
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customerPhone = :phone ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerPhone(@Param("phone") String phone);
+
+    /**
+     * Count bookings for a trip
+     */
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.trip.tripId = :tripId AND b.bookingStatus NOT IN ('Cancelled')")
+    Long countActiveBookingsForTrip(@Param("tripId") Integer tripId);
+
+    /**
+     * Get the latest booking code sequence number for today
+     */
+    @Query(value = """
+        SELECT MAX(CAST(SUBSTRING(bookingcode, 11) AS INTEGER))
+        FROM bookings
+        WHERE bookingcode LIKE CONCAT('BK', :datePrefix, '%')
+    """, nativeQuery = true)
+    Integer getLatestBookingSequence(@Param("datePrefix") String datePrefix);
 }

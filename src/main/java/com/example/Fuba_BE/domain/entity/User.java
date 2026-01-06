@@ -34,7 +34,7 @@ public class User {
     private Role role;
 
     @Column(name = "status")
-    private String status = "Hoạt động";
+    private String status = "Active";
 
     @Column(name = "emailverified")
     private Boolean emailVerified = false;

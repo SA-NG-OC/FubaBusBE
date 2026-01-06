@@ -1,434 +1,763 @@
 <!DOCTYPE html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test WebSocket - Seat Locking</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test WebSocket - Bus Booking System</title>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+      .header {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        color: #667eea;
+        font-size: 2.5em;
+      }
+      .header p {
+        margin: 10px 0 0 0;
+        color: #666;
+        font-size: 1.1em;
+      }
+      .container {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      h2 {
+        color: #333;
+        border-bottom: 3px solid #667eea;
+        padding-bottom: 10px;
+        margin-top: 0;
+      }
+      h3 {
+        color: #555;
+        margin-top: 20px;
+      }
+      .status {
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-weight: bold;
+        display: inline-block;
+        min-width: 200px;
+        text-align: center;
+      }
+      .connected {
+        background: #d4edda;
+        color: #155724;
+        border: 2px solid #28a745;
+      }
+      .disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 2px solid #dc3545;
+      }
+      input,
+      select,
+      textarea {
+        padding: 10px 15px;
+        margin: 5px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+      button:active {
+        transform: translateY(0);
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+      button.danger {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+      button.success {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      }
+      .two-column {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 768px) {
+        .two-column {
+          grid-template-columns: 1fr;
         }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
+      }
+      .seat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+        margin: 20px 0;
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 10px;
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+      }
+      .seat {
+        padding: 15px;
+        text-align: center;
+        border: 3px solid #ddd;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-weight: bold;
+        position: relative;
+      }
+      .seat::before {
+        content: "🪑";
+        display: block;
+        font-size: 24px;
+        margin-bottom: 5px;
+      }
+      .seat.available {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border-color: #28a745;
+      }
+      .seat.available:hover {
+        transform: scale(1.1) rotate(3deg);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+      }
+      .seat.locked {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border-color: #ffc107;
+        cursor: not-allowed;
+      }
+      .seat.locked-by-me {
+        background: linear-gradient(135deg, #cce5ff 0%, #b8daff 100%);
+        border-color: #007bff;
+        animation: pulse 2s infinite;
+      }
+      .seat.locked-by-me:hover {
+        transform: scale(1.1);
+      }
+      .seat.booked {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        border-color: #dc3545;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
         }
-        h1, h2 { color: #333; }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            font-weight: bold;
+        50% {
+          box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
         }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
-        input, button {
-            padding: 10px;
-            margin: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        button {
-            background: #007bff;
-            color: white;
-            cursor: pointer;
-            border: none;
-        }
-        button:hover { background: #0056b3; }
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .seat-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .seat {
-            padding: 20px;
-            text-align: center;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-        }
-        .seat.available {
-            background: #d4edda;
-            border-color: #28a745;
-        }
-        .seat.available:hover {
-            background: #c3e6cb;
-            transform: scale(1.05);
-        }
-        .seat.locked {
-            background: #fff3cd;
-            border-color: #ffc107;
-            cursor: not-allowed;
-        }
-        .seat.locked-by-me {
-            background: #cce5ff;
-            border-color: #007bff;
-        }
-        .seat.booked {
-            background: #f8d7da;
-            border-color: #dc3545;
-            cursor: not-allowed;
-        }
-        .log {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-        }
-        .log-entry {
-            margin: 5px 0;
-            padding: 5px;
-            border-left: 3px solid #007bff;
-            padding-left: 10px;
-        }
-        .log-entry.success { border-color: #28a745; }
-        .log-entry.error { border-color: #dc3545; }
-        .log-entry.info { border-color: #17a2b8; }
-        .controls {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .seat-info {
-            font-size: 11px;
-            margin-top: 5px;
-            color: #666;
-        }
+      }
+      .log {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        border-radius: 8px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+      }
+      .log-entry {
+        margin: 5px 0;
+        padding: 8px;
+        border-left: 4px solid #007bff;
+        padding-left: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      .log-entry.success {
+        border-color: #28a745;
+        color: #7dff7d;
+      }
+      .log-entry.error {
+        border-color: #dc3545;
+        color: #ff7d7d;
+      }
+      .log-entry.info {
+        border-color: #17a2b8;
+        color: #7dd3ff;
+      }
+      .log-entry.warning {
+        border-color: #ffc107;
+        color: #ffe97d;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        margin: 10px 0;
+      }
+      .form-group label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #555;
+      }
+      .seat-info {
+        font-size: 10px;
+        margin-top: 5px;
+        color: #666;
+      }
+      .trip-info {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+      }
+      .trip-info h4 {
+        margin-top: 0;
+        color: #667eea;
+      }
+      .badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 2px;
+      }
+      .badge.available {
+        background: #d4edda;
+        color: #155724;
+      }
+      .badge.locked {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .badge.booked {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .booking-form {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 15px;
+      }
+      .selected-seats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 10px 0;
+      }
+      .selected-seat-badge {
+        background: #007bff;
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .selected-seat-badge button {
+        background: rgba(255, 255, 255, 0.3);
+        border: none;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .model-viewer {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      .api-endpoint {
+        background: #1e1e1e;
+        color: #7dff7d;
+        padding: 10px 15px;
+        border-radius: 6px;
+        font-family: "Consolas", monospace;
+        margin: 10px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .api-method {
+        background: #667eea;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+        margin-right: 10px;
+      }
+      .legend {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin: 15px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .legend-box {
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+        border: 2px solid;
+      }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-weight: 600;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+      }
+      .tab.active {
+        color: #667eea;
+        border-bottom-color: #667eea;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
     </style>
-</head>
-<body>
-    <h1>🚌 Test WebSocket - Seat Locking System</h1>
-    
-    <div class="container">
-        <h2>⚙️ Kết nối</h2>
-        <div class="controls">
-            <label>Server URL:</label>
-            <input type="text" id="serverUrl" value="http://localhost:5230/ws" style="width: 300px;">
-            <label>Trip ID:</label>
-            <input type="number" id="tripId" value="1" style="width: 100px;">
-            <label>User ID:</label>
-            <input type="text" id="userId" value="user_test_1" style="width: 150px;">
-            <button onclick="connect()">Kết nối</button>
-            <button onclick="disconnect()" id="disconnectBtn" disabled>Ngắt kết nối</button>
-        </div>
-        <div id="connectionStatus" class="status disconnected">❌ Chưa kết nối</div>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🚌 Bus Booking System - WebSocket Testing Tool</h1>
+      <p>
+        Complete testing suite for seat locking, real-time updates, and booking
+        flow
+      </p>
     </div>
 
     <div class="container">
-        <h2>🪑 Sơ đồ ghế (Test seats)</h2>
-        <div class="controls">
-            <button onclick="loadSeats()" id="loadSeatsBtn">Tải danh sách ghế</button>
-            <button onclick="createTestSeats()" id="createTestSeatsBtn">Tạo test seats</button>
-            <button onclick="clearAllLocks()">Xóa tất cả locks (Admin)</button>
-        </div>
-        <div id="seatGrid" class="seat-grid">
-            <!-- Seats will be loaded here -->
-        </div>
+      <h2>⚙️ Kết nối</h2>
+      <div class="controls">
+        <label>Server URL:</label>
+        <input
+          type="text"
+          id="serverUrl"
+          value="http://localhost:5230/ws"
+          style="width: 300px"
+        />
+        <label>Trip ID:</label>
+        <input type="number" id="tripId" value="1" style="width: 100px" />
+        <label>User ID:</label>
+        <input
+          type="text"
+          id="userId"
+          value="user_test_1"
+          style="width: 150px"
+        />
+        <button onclick="connect()">Kết nối</button>
+        <button onclick="disconnect()" id="disconnectBtn" disabled>
+          Ngắt kết nối
+        </button>
+      </div>
+      <div id="connectionStatus" class="status disconnected">
+        ❌ Chưa kết nối
+      </div>
     </div>
 
     <div class="container">
-        <h2>🧪 Test Actions</h2>
-        <div class="controls">
-            <label>Seat ID:</label>
-            <input type="number" id="testSeatId" value="1" style="width: 100px;">
-            <button onclick="lockSeat()">🔒 Lock ghế</button>
-            <button onclick="unlockSeat()">🔓 Unlock ghế</button>
-            <button onclick="confirmBooking()">✅ Confirm Booking</button>
-        </div>
+      <h2>🪑 Sơ đồ ghế (Test seats)</h2>
+      <div class="controls">
+        <button onclick="loadSeats()" id="loadSeatsBtn">
+          Tải danh sách ghế
+        </button>
+        <button onclick="createTestSeats()" id="createTestSeatsBtn">
+          Tạo test seats
+        </button>
+        <button onclick="clearAllLocks()">Xóa tất cả locks (Admin)</button>
+      </div>
+      <div id="seatGrid" class="seat-grid">
+        <!-- Seats will be loaded here -->
+      </div>
     </div>
 
     <div class="container">
-        <h2>📋 Logs</h2>
-        <button onclick="clearLogs()">Xóa logs</button>
-        <div id="logContainer" class="log"></div>
+      <h2>🧪 Test Actions</h2>
+      <div class="controls">
+        <label>Seat ID:</label>
+        <input type="number" id="testSeatId" value="1" style="width: 100px" />
+        <button onclick="lockSeat()">🔒 Lock ghế</button>
+        <button onclick="unlockSeat()">🔓 Unlock ghế</button>
+        <button onclick="confirmBooking()">✅ Confirm Booking</button>
+      </div>
+    </div>
+
+    <div class="container">
+      <h2>📋 Logs</h2>
+      <button onclick="clearLogs()">Xóa logs</button>
+      <div id="logContainer" class="log"></div>
     </div>
 
     <script>
-        let stompClient = null;
-        let currentTripId = null;
-        let currentUserId = null;
-        let seats = new Map();
+      let stompClient = null;
+      let currentTripId = null;
+      let currentUserId = null;
+      let seats = new Map();
 
-        function log(message, type = 'info') {
-            const logContainer = document.getElementById('logContainer');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            const timestamp = new Date().toLocaleTimeString();
-            entry.textContent = `[${timestamp}] ${message}`;
-            logContainer.insertBefore(entry, logContainer.firstChild);
-        }
+      function log(message, type = "info") {
+        const logContainer = document.getElementById("logContainer");
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        const timestamp = new Date().toLocaleTimeString();
+        entry.textContent = `[${timestamp}] ${message}`;
+        logContainer.insertBefore(entry, logContainer.firstChild);
+      }
 
-        function connect() {
-            const serverUrl = document.getElementById('serverUrl').value;
-            currentTripId = document.getElementById('tripId').value;
-            currentUserId = document.getElementById('userId').value;
+      function connect() {
+        const serverUrl = document.getElementById("serverUrl").value;
+        currentTripId = document.getElementById("tripId").value;
+        currentUserId = document.getElementById("userId").value;
 
-            log(`Đang kết nối đến ${serverUrl}...`, 'info');
+        log(`Đang kết nối đến ${serverUrl}...`, "info");
 
-            const socket = new SockJS(serverUrl);
-            stompClient = Stomp.over(socket);
+        const socket = new SockJS(serverUrl);
+        stompClient = Stomp.over(socket);
 
-            stompClient.connect({}, function(frame) {
-                log('✅ Kết nối WebSocket thành công!', 'success');
-                document.getElementById('connectionStatus').className = 'status connected';
-                document.getElementById('connectionStatus').textContent = '✅ Đã kết nối';
-                document.getElementById('disconnectBtn').disabled = false;
+        stompClient.connect(
+          {},
+          function (frame) {
+            log("✅ Kết nối WebSocket thành công!", "success");
+            document.getElementById("connectionStatus").className =
+              "status connected";
+            document.getElementById("connectionStatus").textContent =
+              "✅ Đã kết nối";
+            document.getElementById("disconnectBtn").disabled = false;
 
-                // Subscribe to seat updates
-                const topic = `/topic/trips/${currentTripId}/seats`;
-                log(`Đang subscribe to: ${topic}`, 'info');
+            // Subscribe to seat updates
+            const topic = `/topic/trips/${currentTripId}/seats`;
+            log(`Đang subscribe to: ${topic}`, "info");
 
-                stompClient.subscribe(topic, function(message) {
-                    const seatUpdate = JSON.parse(message.body);
-                    log(`📢 Nhận broadcast: ${seatUpdate.type} - Seat ${seatUpdate.seatNumber || seatUpdate.seatId}`, 'info');
-                    console.log('Seat update:', seatUpdate);
-                    updateSeatUI(seatUpdate);
-                });
-
-                // Subscribe to personal responses
-                stompClient.subscribe('/user/queue/seat/response', function(message) {
-                    const response = JSON.parse(message.body);
-                    if (response.success) {
-                        log(`✅ ${response.type}: Seat ${response.seatId}`, 'success');
-                    } else {
-                        log(`❌ ${response.type}: ${response.message}`, 'error');
-                    }
-                });
-
-                // Load seats after connection
-                loadSeats();
-            }, function(error) {
-                log(`❌ Lỗi kết nối: ${error}`, 'error');
-                document.getElementById('connectionStatus').className = 'status disconnected';
-                document.getElementById('connectionStatus').textContent = '❌ Lỗi kết nối';
+            stompClient.subscribe(topic, function (message) {
+              const seatUpdate = JSON.parse(message.body);
+              log(
+                `📢 Nhận broadcast: ${seatUpdate.type} - Seat ${
+                  seatUpdate.seatNumber || seatUpdate.seatId
+                }`,
+                "info"
+              );
+              console.log("Seat update:", seatUpdate);
+              updateSeatUI(seatUpdate);
             });
-        }
 
-        function disconnect() {
-            if (stompClient !== null) {
-                stompClient.disconnect();
-                log('Đã ngắt kết nối WebSocket', 'info');
-            }
-            document.getElementById('connectionStatus').className = 'status disconnected';
-            document.getElementById('connectionStatus').textContent = '❌ Đã ngắt kết nối';
-            document.getElementById('disconnectBtn').disabled = true;
-        }
-
-        function lockSeat(seatId = null) {
-            if (!stompClient || !stompClient.connected) {
-                alert('Vui lòng kết nối WebSocket trước!');
-                return;
-            }
-
-            const sid = seatId || document.getElementById('testSeatId').value;
-            const message = {
-                seatId: parseInt(sid),
-                tripId: parseInt(currentTripId),
-                userId: currentUserId
-            };
-
-            log(`🔒 Đang gửi lock request cho seat ${sid}...`, 'info');
-            stompClient.send('/app/seat/lock', {}, JSON.stringify(message));
-        }
-
-        function unlockSeat(seatId = null) {
-            if (!stompClient || !stompClient.connected) {
-                alert('Vui lòng kết nối WebSocket trước!');
-                return;
-            }
-
-            const sid = seatId || document.getElementById('testSeatId').value;
-            const message = {
-                seatId: parseInt(sid),
-                tripId: parseInt(currentTripId),
-                userId: currentUserId
-            };
-
-            log(`🔓 Đang gửi unlock request cho seat ${sid}...`, 'info');
-            stompClient.send('/app/seat/unlock', {}, JSON.stringify(message));
-        }
-
-        async function loadSeats() {
-            const tripId = document.getElementById('tripId').value;
-            log(`Đang tải danh sách ghế cho trip ${tripId}...`, 'info');
-
-            try {
-                const response = await fetch(`http://localhost:5230/api/trips/seats/${tripId}`);
-                const data = await response.json();
-                
-                if (data.success && data.data && data.data.floors) {
-                    seats.clear();
-                    data.data.floors.forEach(floor => {
-                        floor.seats.forEach(seat => {
-                            seats.set(seat.seatId, seat);
-                        });
-                    });
-                    renderSeats();
-                    log(`✅ Đã tải ${seats.size} ghế`, 'success');
+            // Subscribe to personal responses
+            stompClient.subscribe(
+              "/user/queue/seat/response",
+              function (message) {
+                const response = JSON.parse(message.body);
+                if (response.success) {
+                  log(
+                    `✅ ${response.type}: Seat ${response.seatId}`,
+                    "success"
+                  );
                 } else {
-                    log(`⚠️ Chưa có seats cho trip ${tripId}. Tạo test seats trước!`, 'error');
+                  log(`❌ ${response.type}: ${response.message}`, "error");
                 }
-            } catch (error) {
-                log(`❌ Lỗi tải seats: ${error.message}`, 'error');
-            }
+              }
+            );
+
+            // Load seats after connection
+            loadSeats();
+          },
+          function (error) {
+            log(`❌ Lỗi kết nối: ${error}`, "error");
+            document.getElementById("connectionStatus").className =
+              "status disconnected";
+            document.getElementById("connectionStatus").textContent =
+              "❌ Lỗi kết nối";
+          }
+        );
+      }
+
+      function disconnect() {
+        if (stompClient !== null) {
+          stompClient.disconnect();
+          log("Đã ngắt kết nối WebSocket", "info");
+        }
+        document.getElementById("connectionStatus").className =
+          "status disconnected";
+        document.getElementById("connectionStatus").textContent =
+          "❌ Đã ngắt kết nối";
+        document.getElementById("disconnectBtn").disabled = true;
+      }
+
+      function lockSeat(seatId = null) {
+        if (!stompClient || !stompClient.connected) {
+          alert("Vui lòng kết nối WebSocket trước!");
+          return;
         }
 
-        function renderSeats() {
-            const grid = document.getElementById('seatGrid');
-            grid.innerHTML = '';
+        const sid = seatId || document.getElementById("testSeatId").value;
+        const message = {
+          seatId: parseInt(sid),
+          tripId: parseInt(currentTripId),
+          userId: currentUserId,
+        };
 
-            if (seats.size === 0) {
-                grid.innerHTML = '<p>Chưa có ghế nào. Click "Tạo test seats" để tạo dữ liệu test.</p>';
-                return;
+        log(`🔒 Đang gửi lock request cho seat ${sid}...`, "info");
+        stompClient.send("/app/seat/lock", {}, JSON.stringify(message));
+      }
+
+      function unlockSeat(seatId = null) {
+        if (!stompClient || !stompClient.connected) {
+          alert("Vui lòng kết nối WebSocket trước!");
+          return;
+        }
+
+        const sid = seatId || document.getElementById("testSeatId").value;
+        const message = {
+          seatId: parseInt(sid),
+          tripId: parseInt(currentTripId),
+          userId: currentUserId,
+        };
+
+        log(`🔓 Đang gửi unlock request cho seat ${sid}...`, "info");
+        stompClient.send("/app/seat/unlock", {}, JSON.stringify(message));
+      }
+
+      async function loadSeats() {
+        const tripId = document.getElementById("tripId").value;
+        log(`Đang tải danh sách ghế cho trip ${tripId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/api/trips/seats/${tripId}`
+          );
+          const data = await response.json();
+
+          if (data.success && data.data && data.data.floors) {
+            seats.clear();
+            data.data.floors.forEach((floor) => {
+              floor.seats.forEach((seat) => {
+                seats.set(seat.seatId, seat);
+              });
+            });
+            renderSeats();
+            log(`✅ Đã tải ${seats.size} ghế`, "success");
+          } else {
+            log(
+              `⚠️ Chưa có seats cho trip ${tripId}. Tạo test seats trước!`,
+              "error"
+            );
+          }
+        } catch (error) {
+          log(`❌ Lỗi tải seats: ${error.message}`, "error");
+        }
+      }
+
+      function renderSeats() {
+        const grid = document.getElementById("seatGrid");
+        grid.innerHTML = "";
+
+        if (seats.size === 0) {
+          grid.innerHTML =
+            '<p>Chưa có ghế nào. Click "Tạo test seats" để tạo dữ liệu test.</p>';
+          return;
+        }
+
+        seats.forEach((seat, seatId) => {
+          const seatDiv = document.createElement("div");
+          seatDiv.className = "seat";
+          seatDiv.id = `seat-${seatId}`;
+
+          let className = "available";
+          let statusText = "✅ Trống";
+
+          if (seat.status === "Đã đặt") {
+            className = "booked";
+            statusText = "❌ Đã đặt";
+          } else if (seat.status === "Đang giữ") {
+            if (seat.lockedBy === currentUserId) {
+              className = "locked-by-me";
+              statusText = "🔒 Của tôi";
+            } else {
+              className = "locked";
+              statusText = "⏳ Đang giữ";
             }
+          }
 
-            seats.forEach((seat, seatId) => {
-                const seatDiv = document.createElement('div');
-                seatDiv.className = 'seat';
-                seatDiv.id = `seat-${seatId}`;
-                
-                let className = 'available';
-                let statusText = '✅ Trống';
-                
-                if (seat.status === 'Đã đặt') {
-                    className = 'booked';
-                    statusText = '❌ Đã đặt';
-                } else if (seat.status === 'Đang giữ') {
-                    if (seat.lockedBy === currentUserId) {
-                        className = 'locked-by-me';
-                        statusText = '🔒 Của tôi';
-                    } else {
-                        className = 'locked';
-                        statusText = '⏳ Đang giữ';
-                    }
-                }
+          seatDiv.className += " " + className;
 
-                seatDiv.className += ' ' + className;
-                
-                const expiryInfo = seat.holdExpiry ? 
-                    `<div class="seat-info">Hết hạn: ${new Date(seat.holdExpiry).toLocaleTimeString()}</div>` : '';
-                const lockedByInfo = seat.lockedBy ? 
-                    `<div class="seat-info">Bởi: ${seat.lockedBy}</div>` : '';
-                
-                seatDiv.innerHTML = `
-                    <div><strong>${seat.seatNumber || 'Seat ' + seatId}</strong></div>
+          const expiryInfo = seat.holdExpiry
+            ? `<div class="seat-info">Hết hạn: ${new Date(
+                seat.holdExpiry
+              ).toLocaleTimeString()}</div>`
+            : "";
+          const lockedByInfo = seat.lockedBy
+            ? `<div class="seat-info">Bởi: ${seat.lockedBy}</div>`
+            : "";
+
+          seatDiv.innerHTML = `
+                    <div><strong>${
+                      seat.seatNumber || "Seat " + seatId
+                    }</strong></div>
                     <div>${statusText}</div>
                     ${lockedByInfo}
                     ${expiryInfo}
                 `;
 
-                if (className === 'available') {
-                    seatDiv.onclick = () => lockSeat(seatId);
-                } else if (className === 'locked-by-me') {
-                    seatDiv.onclick = () => unlockSeat(seatId);
-                }
+          if (className === "available") {
+            seatDiv.onclick = () => lockSeat(seatId);
+          } else if (className === "locked-by-me") {
+            seatDiv.onclick = () => unlockSeat(seatId);
+          }
 
-                grid.appendChild(seatDiv);
-            });
-        }
+          grid.appendChild(seatDiv);
+        });
+      }
 
-        function updateSeatUI(seatUpdate) {
-            if (!seatUpdate.seatId) return;
+      function updateSeatUI(seatUpdate) {
+        if (!seatUpdate.seatId) return;
 
-            // Update in-memory seat data
-            const seat = seats.get(seatUpdate.seatId) || {};
-            seat.seatId = seatUpdate.seatId;
-            seat.seatNumber = seatUpdate.seatNumber || seat.seatNumber;
-            seat.status = seatUpdate.status;
-            seat.lockedBy = seatUpdate.lockedBy;
-            seat.holdExpiry = seatUpdate.lockExpiry;
-            seats.set(seatUpdate.seatId, seat);
+        // Update in-memory seat data
+        const seat = seats.get(seatUpdate.seatId) || {};
+        seat.seatId = seatUpdate.seatId;
+        seat.seatNumber = seatUpdate.seatNumber || seat.seatNumber;
+        seat.status = seatUpdate.status;
+        seat.lockedBy = seatUpdate.lockedBy;
+        seat.holdExpiry = seatUpdate.lockExpiry;
+        seats.set(seatUpdate.seatId, seat);
 
-            // Re-render seats
-            renderSeats();
-        }
+        // Re-render seats
+        renderSeats();
+      }
 
-        async function createTestSeats() {
-            const tripId = document.getElementById('tripId').value;
-            log(`Đang tạo test seats cho trip ${tripId}...`, 'info');
+      async function createTestSeats() {
+        const tripId = document.getElementById("tripId").value;
+        log(`Đang tạo test seats cho trip ${tripId}...`, "info");
 
-            try {
-                const response = await fetch(`http://localhost:5230/api/trips/${tripId}/seat-map/migrate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ overwrite: true })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    log(`✅ Đã tạo test seats thành công!`, 'success');
-                    await loadSeats();
-                } else {
-                    log(`❌ Lỗi tạo seats: ${data.message}`, 'error');
-                }
-            } catch (error) {
-                log(`❌ Lỗi: ${error.message}`, 'error');
+        try {
+          const response = await fetch(
+            `http://localhost:5230/api/trips/${tripId}/seat-map/migrate`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ overwrite: true }),
             }
-        }
+          );
 
-        async function confirmBooking() {
-            const seatId = document.getElementById('testSeatId').value;
-            log(`Đang confirm booking cho seat ${seatId}...`, 'info');
+          const data = await response.json();
 
-            try {
-                const response = await fetch('http://localhost:5230/api/seats/confirm-booking', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        seatId: parseInt(seatId),
-                        tripId: parseInt(currentTripId),
-                        userId: currentUserId,
-                        paymentId: 'payment_test_' + Date.now()
-                    })
-                });
-
-                const data = await response.json();
-                
-                if (data.success) {
-                    log(`✅ Booking confirmed!`, 'success');
-                } else {
-                    log(`❌ Lỗi: ${data.message}`, 'error');
-                }
-            } catch (error) {
-                log(`❌ Lỗi: ${error.message}`, 'error');
-            }
-        }
-
-        async function clearAllLocks() {
-            if (!confirm('Xóa tất cả locks? (Admin action)')) return;
-
-            log('Đang xóa tất cả locks...', 'info');
-            // This would require an admin endpoint - for now, just reload
+          if (data.success) {
+            log(`✅ Đã tạo test seats thành công!`, "success");
             await loadSeats();
+          } else {
+            log(`❌ Lỗi tạo seats: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
         }
+      }
 
-        function clearLogs() {
-            document.getElementById('logContainer').innerHTML = '';
+      async function confirmBooking() {
+        const seatId = document.getElementById("testSeatId").value;
+        log(`Đang confirm booking cho seat ${seatId}...`, "info");
+
+        try {
+          const response = await fetch(
+            "http://localhost:5230/api/seats/confirm-booking",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                seatId: parseInt(seatId),
+                tripId: parseInt(currentTripId),
+                userId: currentUserId,
+                paymentId: "payment_test_" + Date.now(),
+              }),
+            }
+          );
+
+          const data = await response.json();
+
+          if (data.success) {
+            log(`✅ Booking confirmed!`, "success");
+          } else {
+            log(`❌ Lỗi: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
         }
+      }
 
-        // Auto-connect on page load (optional)
-        // window.onload = () => connect();
+      async function clearAllLocks() {
+        if (!confirm("Xóa tất cả locks? (Admin action)")) return;
+
+        log("Đang xóa tất cả locks...", "info");
+        // This would require an admin endpoint - for now, just reload
+        await loadSeats();
+      }
+
+      function clearLogs() {
+        document.getElementById("logContainer").innerHTML = "";
+      }
+
+      // Auto-connect on page load (optional)
+      // window.onload = () => connect();
     </script>
-</body>
+  </body>
 </html>

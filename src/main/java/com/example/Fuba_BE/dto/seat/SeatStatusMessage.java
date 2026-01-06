@@ -37,7 +37,7 @@ public class SeatStatusMessage {
     private Integer tripId;
     
     /**
-     * Current status of the seat: "Trống", "Đang giữ", "Đã đặt"
+     * Current status of the seat: "Available", "Held", "Booked"
      */
     private String status;
     
@@ -94,7 +94,7 @@ public class SeatStatusMessage {
                 .seatId(seatId)
                 .seatNumber(seatNumber)
                 .tripId(tripId)
-                .status("Đang giữ")
+                .status("Held")
                 .lockedBy(lockedBy)
                 .lockExpiry(lockExpiry)
                 .floorNumber(floorNumber)
@@ -112,7 +112,7 @@ public class SeatStatusMessage {
                 .seatId(seatId)
                 .seatNumber(seatNumber)
                 .tripId(tripId)
-                .status("Trống")
+                .status("Available")
                 .lockedBy(null)
                 .lockExpiry(null)
                 .floorNumber(floorNumber)
@@ -130,7 +130,7 @@ public class SeatStatusMessage {
                 .seatId(seatId)
                 .seatNumber(seatNumber)
                 .tripId(tripId)
-                .status("Trống")
+                .status("Available")
                 .lockedBy(null)
                 .lockExpiry(null)
                 .floorNumber(floorNumber)
@@ -150,7 +150,7 @@ public class SeatStatusMessage {
                 .seatId(seatId)
                 .seatNumber(seatNumber)
                 .tripId(tripId)
-                .status("Đã đặt")
+                .status("Booked")
                 .lockedBy(bookedBy)
                 .lockExpiry(null)
                 .floorNumber(floorNumber)

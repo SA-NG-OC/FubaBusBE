@@ -20,7 +20,7 @@ public interface RouteMapper {
     @Mapping(target = "routeId", ignore = true)
     @Mapping(target = "origin", ignore = true)
     @Mapping(target = "destination", ignore = true)
-    @Mapping(target = "status", constant = "Hoạt động")
+    @Mapping(target = "status", constant = "Active")
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     Route toEntity(RouteRequestDTO request);
