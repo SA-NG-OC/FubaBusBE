@@ -71,11 +71,38 @@ public class TripService implements ITripService {
 
     @Override
     @Transactional
-    public void updateTripStatus(Integer tripId, String status) {
-        int updatedCount = tripRepository.updateStatus(tripId, status);
-        if (updatedCount == 0) {
-            throw new ResourceNotFoundException("Trip not found with id: " + tripId);
+    public void updateTripStatus(Integer tripId, String status, String note) {
+        // 1. Tìm chuyến xe (để check tồn tại và lấy entity)
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        // 2. Validate trạng thái hợp lệ (Chỉ chấp nhận các status trong Enum)
+        try {
+            // Kiểm tra xem status gửi lên có đúng chính tả trong Enum không
+            // (Lưu ý: FE gửi lên chuỗi hiển thị 'Running', ta cần map ngược lại hoặc dùng chuẩn UPPERCASE tùy convention của bạn)
+            // Ở đây mình giả định FE gửi đúng chuỗi khớp với DB (Ví dụ: "Running", "Delayed")
+            boolean isValid = false;
+            for (TripStatus ts : TripStatus.values()) {
+                if (ts.getDisplayName().equals(status)) {
+                    isValid = true;
+                    break;
+                }
+            }
+            if (!isValid) throw new IllegalArgumentException();
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid status: " + status);
         }
+
+        // 3. Cập nhật
+        trip.setStatus(status);
+
+        // Nếu có ghi chú (ví dụ lý do hoãn), cập nhật luôn
+        if (note != null) {
+            trip.setStatusNote(note);
+        }
+
+        // 4. Lưu lại
+        tripRepository.save(trip);
     }
 
     // --- HÀM TẠO CHUYẾN XE (Create Trip) ---
@@ -225,5 +252,20 @@ public class TripService implements ITripService {
 
         // 4. Cuối cùng xóa chuyến xe
         tripRepository.delete(trip);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable) {
+        // 1. Kiểm tra tài xế có tồn tại không
+        if (!driverRepository.existsById(driverId)) {
+            throw new ResourceNotFoundException("Driver not found with id: " + driverId);
+        }
+
+        // 2. Xử lý status rỗng
+        String filterStatus = StringUtils.hasText(status) ? status : null;
+
+        // 3. Gọi Repository (Tìm cả vai chính lẫn vai phụ)
+        return tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
     }
 }

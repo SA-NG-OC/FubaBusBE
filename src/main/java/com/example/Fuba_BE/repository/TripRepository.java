@@ -122,4 +122,11 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
     boolean isPersonBusy(@Param("personId") Integer personId,
                          @Param("startTime") LocalDateTime startTime,
                          @Param("endTime") LocalDateTime endTime);
+
+    @Query("SELECT t FROM Trip t " +
+            "WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId) " +
+            "AND (:status IS NULL OR t.status = :status)")
+    Page<Trip> findTripsByDriverOrSubDriver(@Param("driverId") Integer driverId,
+                                            @Param("status") String status,
+                                            Pageable pageable);
 }

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -83,9 +84,9 @@ public class TripController {
     @PatchMapping("/{tripId}/status")
     public ResponseEntity<ApiResponse<Void>> updateTripStatus(
             @PathVariable Integer tripId,
-            @Valid @RequestBody TripStatusUpdateRequestDTO request
+            @RequestBody @Valid TripStatusUpdateDTO request
     ) {
-        tripService.updateTripStatus(tripId, request.getStatus());
+        tripService.updateTripStatus(tripId, request.getStatus(), request.getNote());
         return ResponseEntity.ok(ApiResponse.success("Trip status updated successfully", null));
     }
 
@@ -108,5 +109,20 @@ public class TripController {
     public ResponseEntity<ApiResponse<Void>> deleteTrip(@PathVariable Integer tripId) {
         tripService.deleteTrip(tripId);
         return ResponseEntity.ok(ApiResponse.success("Trip deleted successfully", null));
+    }
+
+    @GetMapping("/driver/{driverId}")
+    public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getDriverTrips(
+            @PathVariable Integer driverId,
+            @RequestParam(required = false) String status, // Lọc theo: Waiting, Running, Completed...
+            @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable
+    ) {
+        // Gọi Service
+        Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, pageable);
+
+        // Convert sang DTO
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+
+        return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
     }
 }

@@ -14,7 +14,7 @@ public interface ITripService {
     // Trả về List<Trip> thay vì DTO
     List<Trip> getTripsDetailsByDate(LocalDate date);
 
-    void updateTripStatus(Integer tripId, String status);
+    void updateTripStatus(Integer tripId, String status, String note);
 
     // Trả về Page<Trip> thay vì Page<DTO>
     Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId, Pageable pageable);
@@ -23,4 +23,6 @@ public interface ITripService {
     Trip createTrip(TripCreateRequestDTO request);
 
     void deleteTrip(Integer tripId);
+
+    Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable);
 }
