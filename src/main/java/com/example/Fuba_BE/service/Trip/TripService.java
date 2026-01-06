@@ -212,7 +212,7 @@ public class TripService implements ITripService {
         List<TripSeat> list = new ArrayList<>();
 
         // 1. Status: Lấy từ Enum đã sửa ("Available")
-        final String STATUS_TO_SAVE = SeatStatus.AVAILABLE.getDisplayName();
+        final String STATUS_TO_SAVE = SeatStatus.Available.getDisplayName();
 
         final String TYPE_NORMAL = "Standard";
 
@@ -240,7 +240,7 @@ public class TripService implements ITripService {
         // Nếu có ghế "Booked" -> Chặn không cho xóa
         boolean hasBookings = tripSeatRepository.existsByTrip_TripIdAndStatus(
                 tripId,
-                SeatStatus.BOOKED.getDisplayName() // "Booked"
+                SeatStatus.Booked.getDisplayName() // "Booked"
         );
 
         if (hasBookings) {
