@@ -61,7 +61,7 @@ public class TicketChange {
     private User approvedBy;
 
     @Column(name = "changestatus")
-    private String changeStatus = "Chờ xử lý";
+    private String changeStatus = "Pending";
 
     @Column(name = "changedate")
     private LocalDateTime changeDate;

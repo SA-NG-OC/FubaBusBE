@@ -2,6 +2,7 @@ package com.example.Fuba_BE.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Booking {
 
     @Id
@@ -43,12 +45,15 @@ public class Booking {
     private BigDecimal totalAmount;
 
     @Column(name = "bookingstatus")
-    private String bookingStatus = "Đang giữ";
+    @Builder.Default
+    private String bookingStatus = "Held";
 
     @Column(name = "bookingtype")
+    @Builder.Default
     private String bookingType = "Online";
 
     @Column(name = "isguestbooking")
+    @Builder.Default
     private Boolean isGuestBooking = false;
 
     @Column(name = "guestsessionid")

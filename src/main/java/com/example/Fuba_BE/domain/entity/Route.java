@@ -38,7 +38,7 @@ public class Route {
     private Integer estimatedDuration;
 
     @Column(name = "status")
-    private String status = "Hoạt động";
+    private String status = "Active";
 
     @Column(name = "createdat")
     private LocalDateTime createdAt;

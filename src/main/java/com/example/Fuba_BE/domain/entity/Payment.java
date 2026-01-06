@@ -30,7 +30,7 @@ public class Payment {
     private String paymentMethod;
 
     @Column(name = "paymentstatus")
-    private String paymentStatus = "Chờ xử lý";
+    private String paymentStatus = "Pending";
 
     @Column(name = "transactionid")
     private String transactionId;

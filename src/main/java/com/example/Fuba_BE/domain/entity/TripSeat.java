@@ -74,21 +74,21 @@ public class TripSeat {
      * Helper method to check if the seat is available for locking
      */
     public boolean isAvailable() {
-        return SeatStatus.AVAILABLE.getDisplayName().equals(this.status);
+        return SeatStatus.Available.getDisplayName().equals(this.status);
     }
 
     /**
      * Helper method to check if the seat is currently locked
      */
     public boolean isLocked() {
-        return SeatStatus.LOCKED.getDisplayName().equals(this.status);
+        return SeatStatus.Held.getDisplayName().equals(this.status);
     }
 
     /**
      * Helper method to check if the seat is booked
      */
     public boolean isBooked() {
-        return SeatStatus.BOOKED.getDisplayName().equals(this.status);
+        return SeatStatus.Booked.getDisplayName().equals(this.status);
     }
 
     /**
@@ -102,7 +102,7 @@ public class TripSeat {
      * Lock this seat for a specific user and session
      */
     public void lock(String userId, String sessionId, int lockDurationMinutes) {
-        this.status = SeatStatus.LOCKED.getDisplayName();
+        this.status = SeatStatus.Held.getDisplayName();
         this.lockedBy = userId;
         this.lockedBySessionId = sessionId;
         this.holdExpiry = LocalDateTime.now().plusMinutes(lockDurationMinutes);
@@ -112,7 +112,7 @@ public class TripSeat {
      * Release the lock on this seat
      */
     public void release() {
-        this.status = SeatStatus.AVAILABLE.getDisplayName();
+        this.status = SeatStatus.Available.getDisplayName();
         this.lockedBy = null;
         this.lockedBySessionId = null;
         this.holdExpiry = null;
@@ -122,7 +122,7 @@ public class TripSeat {
      * Mark this seat as booked
      */
     public void book() {
-        this.status = SeatStatus.BOOKED.getDisplayName();
+        this.status = SeatStatus.Booked.getDisplayName();
         this.holdExpiry = null;
         // Keep lockedBy as the booking user reference
     }

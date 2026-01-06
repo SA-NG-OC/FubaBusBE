@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bus Booking System - WebSocket Testing Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .wrapper {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .header {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        text-align: center;
+      }
+      .header h1 {
+        color: #667eea;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+      .header p {
+        color: #666;
+        font-size: 1.1em;
+      }
+      .container {
+        background: white;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+      h2 {
+        color: #333;
+        border-bottom: 3px solid #667eea;
+        padding-bottom: 10px;
+        margin: 0 0 20px 0;
+      }
+      h3 {
+        color: #555;
+        margin: 20px 0 10px 0;
+      }
+      .status {
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-weight: bold;
+        display: inline-block;
+        min-width: 250px;
+        text-align: center;
+      }
+      .connected {
+        background: #d4edda;
+        color: #155724;
+        border: 2px solid #28a745;
+      }
+      .disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 2px solid #dc3545;
+      }
+      input,
+      select,
+      textarea {
+        padding: 10px 15px;
+        margin: 5px 0;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: border-color 0.3s;
+        font-family: inherit;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+      button:active:not(:disabled) {
+        transform: translateY(0);
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+      button.danger {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+      button.success {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin: 15px 0;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        margin: 10px 0;
+      }
+      .form-group label {
+        font-weight: 600;
+        margin-bottom: 5px;
+        color: #555;
+      }
+      .two-column {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 768px) {
+        .two-column {
+          grid-template-columns: 1fr;
+        }
+      }
+      .seat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+        margin: 20px 0;
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 15px;
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        background: #f9f9f9;
+      }
+      .seat {
+        padding: 15px 10px;
+        text-align: center;
+        border: 3px solid #ddd;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-weight: bold;
+        position: relative;
+        font-size: 13px;
+      }
+      .seat::before {
+        content: "🪑";
+        display: block;
+        font-size: 28px;
+        margin-bottom: 5px;
+      }
+      .seat.available {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        border-color: #28a745;
+      }
+      .seat.available:hover {
+        transform: scale(1.1) rotate(3deg);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+      }
+      .seat.locked {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+        border-color: #ffc107;
+        cursor: not-allowed;
+      }
+      .seat.locked-by-me {
+        background: linear-gradient(135deg, #cce5ff 0%, #b8daff 100%);
+        border-color: #007bff;
+        animation: pulse 2s infinite;
+      }
+      .seat.locked-by-me:hover {
+        transform: scale(1.1);
+      }
+      .seat.booked {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        border-color: #dc3545;
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
+        }
+        50% {
+          box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+        }
+      }
+      .seat-info {
+        font-size: 10px;
+        margin-top: 5px;
+        color: #666;
+      }
+      .log {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        border-radius: 8px;
+        max-height: 450px;
+        overflow-y: auto;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 13px;
+      }
+      .log-entry {
+        margin: 5px 0;
+        padding: 8px;
+        border-left: 4px solid #007bff;
+        padding-left: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      .log-entry.success {
+        border-color: #28a745;
+        color: #7dff7d;
+      }
+      .log-entry.error {
+        border-color: #dc3545;
+        color: #ff7d7d;
+      }
+      .log-entry.info {
+        border-color: #17a2b8;
+        color: #7dd3ff;
+      }
+      .log-entry.warning {
+        border-color: #ffc107;
+        color: #ffe97d;
+      }
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .tab {
+        padding: 12px 24px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-weight: 600;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s;
+        font-size: 15px;
+      }
+      .tab:hover {
+        color: #667eea;
+      }
+      .tab.active {
+        color: #667eea;
+        border-bottom-color: #667eea;
+        background: rgba(102, 126, 234, 0.05);
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      .trip-info {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        margin: 15px 0;
+      }
+      .trip-info h4 {
+        margin-top: 0;
+        color: #667eea;
+      }
+      .legend {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin: 15px 0;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: white;
+        border-radius: 6px;
+      }
+      .legend-box {
+        width: 35px;
+        height: 35px;
+        border-radius: 6px;
+        border: 2px solid;
+        flex-shrink: 0;
+      }
+      .selected-seats {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 15px 0;
+      }
+      .selected-seat-badge {
+        background: #007bff;
+        color: white;
+        padding: 10px 15px;
+        border-radius: 20px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .selected-seat-badge button {
+        background: rgba(255, 255, 255, 0.3);
+        border: none;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        margin: 0;
+      }
+      .selected-seat-badge button:hover {
+        background: rgba(255, 255, 255, 0.5);
+      }
+      .booking-form {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 15px;
+      }
+      .passenger-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border: 2px solid #ddd;
+      }
+      .passenger-card h4 {
+        margin-top: 0;
+        color: #667eea;
+      }
+      .model-viewer {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: "Courier New", monospace;
+        font-size: 12px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+      .api-endpoint {
+        background: #1e1e1e;
+        color: #7dff7d;
+        padding: 12px 15px;
+        border-radius: 6px;
+        font-family: "Consolas", monospace;
+        margin: 10px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+      }
+      .api-method {
+        background: #667eea;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-weight: bold;
+        margin-right: 10px;
+        font-size: 12px;
+      }
+      .api-method.get {
+        background: #28a745;
+      }
+      .api-method.post {
+        background: #007bff;
+      }
+      .api-method.ws {
+        background: #ffc107;
+        color: #333;
+      }
+      .result-box {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+        border-left: 4px solid #28a745;
+      }
+      .result-box.error {
+        border-left-color: #dc3545;
+        background: #fff5f5;
+      }
+      .badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        margin: 2px;
+      }
+      .badge.confirmed {
+        background: #d4edda;
+        color: #155724;
+      }
+      .badge.pending {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .badge.cancelled {
+        background: #f8d7da;
+        color: #721c24;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="header">
+        <h1>🚌 Bus Booking System - WebSocket Testing Tool</h1>
+        <p>
+          Complete testing suite for seat locking, real-time updates, and
+          booking flow
+        </p>
+      </div>
+
+      <!-- Connection Section -->
+      <div class="container">
+        <h2>⚙️ 1. Kết nối WebSocket</h2>
+        <div class="form-group">
+          <label>🌐 Server URL:</label>
+          <input
+            type="text"
+            id="serverUrl"
+            value="http://localhost:5230/ws"
+            style="width: 100%"
+          />
+        </div>
+        <div class="controls">
+          <div class="form-group" style="margin: 0">
+            <label>🎫 Trip ID:</label>
+            <input type="number" id="tripId" value="1" style="width: 120px" />
+          </div>
+          <div class="form-group" style="margin: 0">
+            <label>👤 User ID:</label>
+            <input
+              type="text"
+              id="userId"
+              value="user_test_1"
+              style="width: 200px"
+            />
+          </div>
+          <button onclick="connect()">🔌 Kết nối WebSocket</button>
+          <button
+            onclick="disconnect()"
+            id="disconnectBtn"
+            disabled
+            class="danger"
+          >
+            🔌 Ngắt kết nối
+          </button>
+        </div>
+        <div id="connectionStatus" class="status disconnected">
+          ❌ Chưa kết nối - Vui lòng nhập thông tin và click Kết nối
+        </div>
+      </div>
+
+      <!-- Tabs Container -->
+      <div class="container">
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('seats')">
+            🪑 Sơ đồ ghế & Locking
+          </button>
+          <button class="tab" onclick="switchTab('booking')">
+            📝 Đặt vé (Booking)
+          </button>
+          <button class="tab" onclick="switchTab('models')">
+            📊 Models & API
+          </button>
+          <button class="tab" onclick="switchTab('logs')">📋 Logs</button>
+        </div>
+
+        <!-- Tab 1: Seat Map -->
+        <div id="tab-seats" class="tab-content active">
+          <h2>🪑 2. Xem sơ đồ ghế & Test Locking</h2>
+
+          <div class="controls">
+            <button onclick="loadSeats()" class="success">
+              📥 Tải sơ đồ ghế
+            </button>
+            <button onclick="createTestSeats()">🔧 Tạo test seats</button>
+            <button onclick="releaseAllMyLocks()" class="danger">
+              🔓 Giải phóng ghế của tôi
+            </button>
+          </div>
+
+          <div id="tripInfo" class="trip-info" style="display: none">
+            <h4>📍 Thông tin chuyến xe</h4>
+            <div id="tripDetails"></div>
+          </div>
+
+          <div class="legend">
+            <div class="legend-item">
+              <div
+                class="legend-box"
+                style="
+                  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+                  border-color: #28a745;
+                "
+              ></div>
+              <span><strong>Available</strong> - Ghế trống (click để giữ)</span>
+            </div>
+            <div class="legend-item">
+              <div
+                class="legend-box"
+                style="
+                  background: linear-gradient(135deg, #cce5ff 0%, #b8daff 100%);
+                  border-color: #007bff;
+                "
+              ></div>
+              <span><strong>Held (Của tôi)</strong> - Click để bỏ giữ</span>
+            </div>
+            <div class="legend-item">
+              <div
+                class="legend-box"
+                style="
+                  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                  border-color: #ffc107;
+                "
+              ></div>
+              <span><strong>Held (Người khác)</strong></span>
+            </div>
+            <div class="legend-item">
+              <div
+                class="legend-box"
+                style="
+                  background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+                  border-color: #dc3545;
+                "
+              ></div>
+              <span><strong>Booked</strong> - Đã được đặt</span>
+            </div>
+          </div>
+
+          <h3>Sơ đồ ghế:</h3>
+          <div id="seatGrid" class="seat-grid">
+            <p style="text-align: center; color: #999; grid-column: 1/-1">
+              Click "Tải sơ đồ ghế" để xem danh sách ghế
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 2: Booking -->
+        <div id="tab-booking" class="tab-content">
+          <h2>📝 3. Đặt vé (Booking API)</h2>
+
+          <h3>Ghế đã chọn:</h3>
+          <div class="selected-seats" id="selectedSeatsDisplay">
+            <p style="color: #999">
+              Chưa có ghế nào được chọn. Vào tab "Sơ đồ ghế" để chọn ghế (click
+              vào ghế Available).
+            </p>
+          </div>
+
+          <div class="booking-form">
+            <h3>👤 Thông tin khách hàng</h3>
+            <div class="two-column">
+              <div class="form-group">
+                <label>Họ tên:</label>
+                <input
+                  type="text"
+                  id="customerName"
+                  value="Nguyễn Văn A"
+                  style="width: 100%"
+                />
+              </div>
+              <div class="form-group">
+                <label>Số điện thoại:</label>
+                <input
+                  type="text"
+                  id="customerPhone"
+                  value="0901234567"
+                  style="width: 100%"
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Email:</label>
+              <input
+                type="email"
+                id="customerEmail"
+                value="nguyenvana@example.com"
+                style="width: 100%"
+              />
+            </div>
+
+            <h3>🎫 Thông tin hành khách</h3>
+            <div id="passengerForms"></div>
+
+            <div class="controls" style="margin-top: 20px">
+              <button onclick="previewBooking()" class="success">
+                👁️ Xem trước (Preview)
+              </button>
+              <button onclick="confirmBookingAPI()">✅ Xác nhận đặt vé</button>
+            </div>
+          </div>
+
+          <div id="bookingResult"></div>
+        </div>
+
+        <!-- Tab 3: Models & API -->
+        <div id="tab-models" class="tab-content">
+          <h2>📊 4. Models & API Documentation</h2>
+
+          <h3>🔗 API Endpoints</h3>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method get">GET</span>/trips/seats/{tripId}
+            </div>
+            <span>Xem sơ đồ ghế</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method post">POST</span
+              >/trips/{tripId}/seat-map/migrate
+            </div>
+            <span>Tạo test seats</span>
+          </div>
+          <div class="api-endpoint">
+            <div><span class="api-method ws">WS</span>/app/seat/lock</div>
+            <span>Giữ ghế (WebSocket)</span>
+          </div>
+          <div class="api-endpoint">
+            <div><span class="api-method ws">WS</span>/app/seat/unlock</div>
+            <span>Bỏ giữ ghế (WebSocket)</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method post">POST</span>/bookings/confirm
+            </div>
+            <span>Xác nhận đặt vé</span>
+          </div>
+          <div class="api-endpoint">
+            <div><span class="api-method get">GET</span>/bookings/preview</div>
+            <span>Xem trước booking</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method post">POST</span>/bookings/{id}/cancel
+            </div>
+            <span>Hủy vé</span>
+          </div>
+
+          <h3>📦 Data Models</h3>
+          <div class="model-viewer">
+            <pre><strong>SeatStatusMessage</strong> (WebSocket Response)
+{
+  "type": "Held" | "UNLOCKED" | "EXPIRED" | "Booked",
+  "seatId": 1,
+  "seatNumber": "A1",
+  "status": "Available" | "Held" | "Booked",
+  "lockedBy": "user_test_1",
+  "lockExpiry": "2026-01-06T10:15:00",
+  "success": true,
+  "message": "Seat locked successfully"
+}
+
+<strong>BookingConfirmRequest</strong>
+{
+  "tripId": 1,
+  "seatIds": [1, 2],
+  "userId": "user_test_1",
+  "customerName": "Nguyễn Văn A",
+  "customerPhone": "0901234567",
+  "customerEmail": "nguyenvana@example.com",
+  "passengers": [
+    {
+      "seatId": 1,
+      "fullName": "Nguyễn Văn A",
+      "pickupAddress": "Bến xe Miền Đông",
+      "dropoffAddress": "Bến xe Đà Lạt"
+    }
+  ],
+  "isGuestBooking": false
+}
+
+<strong>BookingResponse</strong>
+{
+  "success": true,
+  "bookingId": 1,
+  "bookingCode": "BK20260106001",
+  "bookingStatus": "Paid",
+  "totalAmount": 300000,
+  "tripInfo": {
+    "tripId": 1,
+    "routeName": "TP.HCM - Đà Lạt",
+    "departureTime": "2026-01-07T08:00:00",
+    "arrivalTime": "2026-01-07T14:00:00"
+  },
+  "tickets": [
+    {
+      "ticketId": 1,
+      "ticketCode": "TK20260106001",
+      "seatNumber": "A1",
+      "passengerName": "Nguyễn Văn A",
+      "price": 150000,
+      "status": "Paid"
+    }
+  ]
+}
+
+<strong>TripSeat</strong> (Entity)
+{
+  "seatId": 1,
+  "seatNumber": "A1",
+  "seatType": "VIP",
+  "floor": 1,
+  "status": "Available" | "Held" | "Booked",
+  "lockedBySessionId": "user_test_1",
+  "lockExpiry": "2026-01-06T10:15:00",
+  "price": 150000
+}</pre>
+          </div>
+
+          <h3>🔄 Luồng hoạt động (Workflow)</h3>
+          <div class="trip-info">
+            <ol style="line-height: 2">
+              <li>
+                <strong>Kết nối WebSocket:</strong> Client kết nối tới /ws
+                endpoint
+              </li>
+              <li>
+                <strong>Subscribe topics:</strong>
+                <ul>
+                  <li>
+                    /topic/trips/{tripId}/seats - Nhận broadcast khi ghế thay
+                    đổi
+                  </li>
+                  <li>/user/queue/seat/response - Nhận response cá nhân</li>
+                </ul>
+              </li>
+              <li><strong>Xem sơ đồ ghế:</strong> GET /trips/seats/{tripId}</li>
+              <li>
+                <strong>Giữ ghế (Locking):</strong> Send message tới
+                /app/seat/lock
+                <ul>
+                  <li>Server kiểm tra ghế available</li>
+                  <li>Lock ghế với PESSIMISTIC_WRITE</li>
+                  <li>Broadcast trạng thái mới cho tất cả clients</li>
+                  <li>Tự động expire sau 5 phút</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Đặt vé (Booking):</strong> POST /bookings/confirm
+                <ul>
+                  <li>Validate ghế đang locked bởi user</li>
+                  <li>Tạo Booking + Tickets với @Transactional</li>
+                  <li>Chuyển trạng thái ghế thành Booked</li>
+                  <li>Broadcast cập nhật realtime</li>
+                  <li>Trả về booking code và ticket codes</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Hủy vé:</strong> POST /bookings/{id}/cancel
+                <ul>
+                  <li>Chuyển booking status thành CANCELLED</li>
+                  <li>Giải phóng ghế về Available</li>
+                  <li>Broadcast cập nhật</li>
+                </ul>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <!-- Tab 4: Logs -->
+        <div id="tab-logs" class="tab-content">
+          <h2>📋 5. Activity Logs</h2>
+          <div class="controls">
+            <button onclick="clearLogs()" class="danger">🗑️ Xóa logs</button>
+            <button onclick="exportLogs()" class="success">
+              💾 Export logs
+            </button>
+          </div>
+          <div id="logContainer" class="log">
+            <div class="log-entry info">
+              Chào mừng! Hãy kết nối WebSocket để bắt đầu.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Global variables
+      let stompClient = null;
+      let currentTripId = null;
+      let currentUserId = null;
+      let seats = new Map();
+      let selectedSeats = new Set();
+
+      // Logging function
+      function log(message, type = "info") {
+        const logContainer = document.getElementById("logContainer");
+        const entry = document.createElement("div");
+        entry.className = `log-entry ${type}`;
+        const timestamp = new Date().toLocaleTimeString();
+        entry.textContent = `[${timestamp}] ${message}`;
+        logContainer.insertBefore(entry, logContainer.firstChild);
+      }
+
+      // Tab switching
+      function switchTab(tabName) {
+        // Remove active from all tabs
+        document
+          .querySelectorAll(".tab")
+          .forEach((tab) => tab.classList.remove("active"));
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((content) => content.classList.remove("active"));
+
+        // Add active to selected tab
+        event.target.classList.add("active");
+        document.getElementById(`tab-${tabName}`).classList.add("active");
+
+        log(`Chuyển sang tab: ${tabName}`, "info");
+      }
+
+      // WebSocket connection
+      function connect() {
+        const serverUrl = document.getElementById("serverUrl").value;
+        currentTripId = document.getElementById("tripId").value;
+        currentUserId = document.getElementById("userId").value;
+
+        if (!serverUrl || !currentTripId || !currentUserId) {
+          alert("Vui lòng nhập đầy đủ thông tin!");
+          return;
+        }
+
+        log(`Đang kết nối tới ${serverUrl}...`, "info");
+
+        const socket = new SockJS(serverUrl);
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect(
+          {},
+          function (frame) {
+            log("✅ Kết nối WebSocket thành công!", "success");
+            document.getElementById("connectionStatus").className =
+              "status connected";
+            document.getElementById(
+              "connectionStatus"
+            ).textContent = `✅ Đã kết nối - Trip #${currentTripId} - User: ${currentUserId}`;
+            document.getElementById("disconnectBtn").disabled = false;
+
+            // Subscribe to seat updates
+            const topic = `/topic/trips/${currentTripId}/seats`;
+            log(`Subscribe to: ${topic}`, "info");
+
+            stompClient.subscribe(topic, function (message) {
+              const seatUpdate = JSON.parse(message.body);
+              log(
+                `📢 Broadcast: ${seatUpdate.type} - Seat ${
+                  seatUpdate.seatNumber || seatUpdate.seatId
+                }`,
+                "info"
+              );
+              console.log("Seat update:", seatUpdate);
+              updateSeatUI(seatUpdate);
+            });
+
+            // Subscribe to personal responses
+            stompClient.subscribe(
+              "/user/queue/seat/response",
+              function (message) {
+                const response = JSON.parse(message.body);
+                if (response.success) {
+                  log(
+                    `✅ ${response.type}: Seat ${response.seatId} - ${response.message}`,
+                    "success"
+                  );
+                } else {
+                  log(`❌ ${response.type}: ${response.message}`, "error");
+                }
+              }
+            );
+
+            // Auto-load seats
+            loadSeats();
+          },
+          function (error) {
+            log(`❌ Lỗi kết nối: ${error}`, "error");
+            document.getElementById("connectionStatus").className =
+              "status disconnected";
+            document.getElementById("connectionStatus").textContent =
+              "❌ Lỗi kết nối";
+          }
+        );
+      }
+
+      function disconnect() {
+        if (stompClient !== null) {
+          stompClient.disconnect();
+          log("Đã ngắt kết nối WebSocket", "warning");
+        }
+        document.getElementById("connectionStatus").className =
+          "status disconnected";
+        document.getElementById("connectionStatus").textContent =
+          "❌ Đã ngắt kết nối";
+        document.getElementById("disconnectBtn").disabled = true;
+      }
+
+      // Seat operations
+      function lockSeat(seatId) {
+        if (!stompClient || !stompClient.connected) {
+          alert("Vui lòng kết nối WebSocket trước!");
+          return;
+        }
+
+        const message = {
+          seatId: parseInt(seatId),
+          tripId: parseInt(currentTripId),
+          userId: currentUserId,
+        };
+
+        log(`🔒 Đang gửi lock request cho seat ${seatId}...`, "info");
+        stompClient.send("/app/seat/lock", {}, JSON.stringify(message));
+      }
+
+      function unlockSeat(seatId) {
+        if (!stompClient || !stompClient.connected) {
+          alert("Vui lòng kết nối WebSocket trước!");
+          return;
+        }
+
+        const message = {
+          seatId: parseInt(seatId),
+          tripId: parseInt(currentTripId),
+          userId: currentUserId,
+        };
+
+        log(`🔓 Đang gửi unlock request cho seat ${seatId}...`, "info");
+        stompClient.send("/app/seat/unlock", {}, JSON.stringify(message));
+      }
+
+      async function loadSeats() {
+        const tripId = document.getElementById("tripId").value;
+        log(`Đang tải danh sách ghế cho trip ${tripId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/trips/seats/${tripId}`
+          );
+          const data = await response.json();
+
+          if (data.success && data.data && data.data.floors) {
+            seats.clear();
+            selectedSeats.clear();
+
+            let totalSeats = 0;
+            data.data.floors.forEach((floor) => {
+              floor.seats.forEach((seat) => {
+                seats.set(seat.seatId, seat);
+                totalSeats++;
+
+                // Auto-select locked seats by current user
+                if (seat.status === "Held" && seat.lockedBy === currentUserId) {
+                  selectedSeats.add(seat.seatId);
+                }
+              });
+            });
+
+            // Display trip info
+            const tripInfo = data.data;
+            document.getElementById("tripDetails").innerHTML = `
+                        <p><strong>Route:</strong> ${
+                          tripInfo.routeName || "N/A"
+                        }</p>
+                        <p><strong>Vehicle:</strong> ${
+                          tripInfo.vehicleType || "N/A"
+                        }</p>
+                        <p><strong>Total Seats:</strong> ${totalSeats}</p>
+                    `;
+            document.getElementById("tripInfo").style.display = "block";
+
+            renderSeats();
+            updateSelectedSeatsDisplay();
+            log(`✅ Đã tải ${totalSeats} ghế`, "success");
+          } else {
+            log(
+              `⚠️ Chưa có seats cho trip ${tripId}. Tạo test seats trước!`,
+              "warning"
+            );
+            document.getElementById("seatGrid").innerHTML =
+              '<p style="text-align: center; color: #999; grid-column: 1/-1;">Chưa có ghế nào. Click "Tạo test seats".</p>';
+          }
+        } catch (error) {
+          log(`❌ Lỗi tải seats: ${error.message}`, "error");
+        }
+      }
+
+      function renderSeats() {
+        const grid = document.getElementById("seatGrid");
+        grid.innerHTML = "";
+
+        if (seats.size === 0) {
+          grid.innerHTML =
+            '<p style="text-align: center; color: #999; grid-column: 1/-1;">Chưa có ghế nào. Click "Tạo test seats".</p>';
+          return;
+        }
+
+        seats.forEach((seat, seatId) => {
+          const seatDiv = document.createElement("div");
+          seatDiv.className = "seat";
+          seatDiv.id = `seat-${seatId}`;
+
+          let className = "available";
+          let statusText = "✅ Trống";
+          let statusEnum = seat.status || "Available";
+
+          if (statusEnum === "Booked") {
+            className = "booked";
+            statusText = "❌ Đã đặt";
+          } else if (statusEnum === "Held") {
+            if (seat.lockedBy === currentUserId) {
+              className = "locked-by-me";
+              statusText = "🔒 Của tôi";
+            } else {
+              className = "locked";
+              statusText = "⏳ Đang giữ";
+            }
+          }
+
+          seatDiv.className += " " + className;
+
+          const expiryInfo = seat.lockExpiry
+            ? `<div class="seat-info">Hết hạn: ${new Date(
+                seat.lockExpiry
+              ).toLocaleTimeString()}</div>`
+            : "";
+          const lockedByInfo = seat.lockedBy
+            ? `<div class="seat-info">Bởi: ${seat.lockedBy.substring(
+                0,
+                10
+              )}...</div>`
+            : "";
+          const priceInfo = seat.price
+            ? `<div class="seat-info">Giá: ${seat.price.toLocaleString()}đ</div>`
+            : "";
+
+          seatDiv.innerHTML = `
+                    <div><strong>${
+                      seat.seatNumber || "Seat " + seatId
+                    }</strong></div>
+                    <div style="font-size: 11px;">${statusText}</div>
+                    ${priceInfo}
+                    ${lockedByInfo}
+                    ${expiryInfo}
+                `;
+
+          if (className === "available") {
+            seatDiv.onclick = () => {
+              lockSeat(seatId);
+              selectedSeats.add(seatId);
+            };
+          } else if (className === "locked-by-me") {
+            seatDiv.onclick = () => {
+              if (confirm(`Bỏ giữ ghế ${seat.seatNumber}?`)) {
+                unlockSeat(seatId);
+                selectedSeats.delete(seatId);
+                updateSelectedSeatsDisplay();
+              }
+            };
+          }
+
+          grid.appendChild(seatDiv);
+        });
+      }
+
+      function updateSeatUI(seatUpdate) {
+        if (!seatUpdate.seatId) return;
+
+        // Update in-memory seat data
+        const seat = seats.get(seatUpdate.seatId) || {};
+        seat.seatId = seatUpdate.seatId;
+        seat.seatNumber = seatUpdate.seatNumber || seat.seatNumber;
+        seat.status = seatUpdate.status;
+        seat.lockedBy = seatUpdate.lockedBy;
+        seat.lockExpiry = seatUpdate.lockExpiry;
+        seats.set(seatUpdate.seatId, seat);
+
+        // Update selected seats
+        if (
+          seatUpdate.status === "Held" &&
+          seatUpdate.lockedBy === currentUserId
+        ) {
+          selectedSeats.add(seatUpdate.seatId);
+        } else if (
+          seatUpdate.status !== "Held" ||
+          seatUpdate.lockedBy !== currentUserId
+        ) {
+          selectedSeats.delete(seatUpdate.seatId);
+        }
+
+        // Re-render seats
+        renderSeats();
+        updateSelectedSeatsDisplay();
+      }
+
+      async function createTestSeats() {
+        const tripId = document.getElementById("tripId").value;
+        log(`Đang tạo test seats cho trip ${tripId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/trips/${tripId}/seat-map/migrate`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ overwrite: true }),
+            }
+          );
+
+          const data = await response.json();
+
+          if (data.success) {
+            log(`✅ Đã tạo test seats thành công!`, "success");
+            await loadSeats();
+          } else {
+            log(`❌ Lỗi tạo seats: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      function releaseAllMyLocks() {
+        if (!confirm("Giải phóng tất cả ghế bạn đang giữ?")) return;
+
+        selectedSeats.forEach((seatId) => {
+          unlockSeat(seatId);
+        });
+
+        selectedSeats.clear();
+        updateSelectedSeatsDisplay();
+        log("Đã gửi yêu cầu giải phóng tất cả ghế", "info");
+      }
+
+      // Booking operations
+      function updateSelectedSeatsDisplay() {
+        const display = document.getElementById("selectedSeatsDisplay");
+        const passengerForms = document.getElementById("passengerForms");
+
+        if (selectedSeats.size === 0) {
+          display.innerHTML =
+            '<p style="color: #999;">Chưa có ghế nào được chọn. Vào tab "Sơ đồ ghế" để chọn ghế (click vào ghế Available).</p>';
+          passengerForms.innerHTML =
+            '<p style="color: #999;">Chọn ghế trước để nhập thông tin hành khách</p>';
+          return;
+        }
+
+        // Display selected seats
+        let html = "";
+        selectedSeats.forEach((seatId) => {
+          const seat = seats.get(seatId);
+          if (seat) {
+            html += `
+                        <div class="selected-seat-badge">
+                            <span>Ghế ${seat.seatNumber}</span>
+                            <span>${
+                              seat.price
+                                ? seat.price.toLocaleString() + "đ"
+                                : ""
+                            }</span>
+                            <button onclick="removeSeat(${seatId})">×</button>
+                        </div>
+                    `;
+          }
+        });
+        display.innerHTML = html;
+
+        // Generate passenger forms
+        html = "";
+        let index = 1;
+        selectedSeats.forEach((seatId) => {
+          const seat = seats.get(seatId);
+          if (seat) {
+            html += `
+                        <div class="passenger-card">
+                            <h4>🎫 Hành khách #${index} - Ghế ${seat.seatNumber}</h4>
+                            <div class="form-group">
+                                <label>Họ tên:</label>
+                                <input type="text" class="passenger-name" data-seat-id="${seatId}" 
+                                       value="Hành khách ${index}" style="width: 100%;">
+                            </div>
+                            <div class="two-column">
+                                <div class="form-group">
+                                    <label>Địa chỉ đón:</label>
+                                    <input type="text" class="passenger-pickup" data-seat-id="${seatId}" 
+                                           value="Bến xe Miền Đông" style="width: 100%;">
+                                </div>
+                                <div class="form-group">
+                                    <label>Địa chỉ trả:</label>
+                                    <input type="text" class="passenger-dropoff" data-seat-id="${seatId}" 
+                                           value="Bến xe Đà Lạt" style="width: 100%;">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+            index++;
+          }
+        });
+        passengerForms.innerHTML = html;
+      }
+
+      function removeSeat(seatId) {
+        selectedSeats.delete(seatId);
+        unlockSeat(seatId);
+        updateSelectedSeatsDisplay();
+      }
+
+      async function previewBooking() {
+        if (selectedSeats.size === 0) {
+          alert("Vui lòng chọn ít nhất 1 ghế!");
+          return;
+        }
+
+        const seatIds = Array.from(selectedSeats);
+        const userId = document.getElementById("userId").value;
+
+        log("Đang xem trước booking...", "info");
+
+        try {
+          const url = `http://localhost:5230/bookings/preview?tripId=${currentTripId}&userId=${userId}&seatIds=${seatIds.join(
+            ","
+          )}`;
+          const response = await fetch(url);
+          const data = await response.json();
+
+          const result = document.getElementById("bookingResult");
+          if (data.success) {
+            const issues = data.data.issues || [];
+            result.innerHTML = `
+                        <div class="result-box">
+                            <h3>✅ Preview Booking</h3>
+                            <p><strong>Valid:</strong> ${
+                              data.data.valid ? "Yes" : "No"
+                            }</p>
+                            <p><strong>Total Amount:</strong> ${data.data.totalAmount.toLocaleString()}đ</p>
+                            ${
+                              issues.length > 0
+                                ? "<p><strong>Issues:</strong> " +
+                                  issues.join(", ") +
+                                  "</p>"
+                                : ""
+                            }
+                        </div>
+                    `;
+            log("✅ Preview thành công", "success");
+          } else {
+            result.innerHTML = `
+                        <div class="result-box error">
+                            <h3>❌ Error</h3>
+                            <p>${data.message}</p>
+                        </div>
+                    `;
+            log(`❌ Preview thất bại: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function confirmBookingAPI() {
+        if (selectedSeats.size === 0) {
+          alert("Vui lòng chọn ít nhất 1 ghế!");
+          return;
+        }
+
+        if (!confirm(`Xác nhận đặt ${selectedSeats.size} ghế?`)) return;
+
+        const seatIds = Array.from(selectedSeats);
+        const passengers = [];
+
+        // Collect passenger info
+        document.querySelectorAll(".passenger-name").forEach((input) => {
+          const seatId = parseInt(input.getAttribute("data-seat-id"));
+          const pickup = document.querySelector(
+            `.passenger-pickup[data-seat-id="${seatId}"]`
+          ).value;
+          const dropoff = document.querySelector(
+            `.passenger-dropoff[data-seat-id="${seatId}"]`
+          ).value;
+
+          passengers.push({
+            seatId: seatId,
+            fullName: input.value,
+            pickupAddress: pickup,
+            dropoffAddress: dropoff,
+          });
+        });
+
+        const requestBody = {
+          tripId: parseInt(currentTripId),
+          seatIds: seatIds,
+          userId: document.getElementById("userId").value,
+          customerName: document.getElementById("customerName").value,
+          customerPhone: document.getElementById("customerPhone").value,
+          customerEmail: document.getElementById("customerEmail").value,
+          passengers: passengers,
+          isGuestBooking: false,
+        };
+
+        log("Đang gửi booking request...", "info");
+
+        try {
+          const response = await fetch(
+            "http://localhost:5230/bookings/confirm",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestBody),
+            }
+          );
+
+          const data = await response.json();
+          const result = document.getElementById("bookingResult");
+
+          if (data.success) {
+            const booking = data.data;
+            let ticketsHtml = "";
+            booking.tickets.forEach((ticket) => {
+              ticketsHtml += `
+                            <div style="background: white; padding: 10px; margin: 5px 0; border-radius: 6px;">
+                                <strong>${ticket.ticketCode}</strong> - Ghế ${
+                ticket.seatNumber
+              } - 
+                                ${
+                                  ticket.passengerName
+                                } - ${ticket.price.toLocaleString()}đ
+                                <span class="badge ${ticket.status.toLowerCase()}">${
+                ticket.status
+              }</span>
+                            </div>
+                        `;
+            });
+
+            result.innerHTML = `
+                        <div class="result-box">
+                            <h3>✅ Đặt vé thành công!</h3>
+                            <p><strong>Booking Code:</strong> ${
+                              booking.bookingCode
+                            }</p>
+                            <p><strong>Status:</strong> <span class="badge ${booking.bookingStatus.toLowerCase()}">${
+              booking.bookingStatus
+            }</span></p>
+                            <p><strong>Total Amount:</strong> ${booking.totalAmount.toLocaleString()}đ</p>
+                            <h4>Vé của bạn:</h4>
+                            ${ticketsHtml}
+                        </div>
+                    `;
+
+            log(
+              `✅ Đặt vé thành công! Booking code: ${booking.bookingCode}`,
+              "success"
+            );
+
+            // Clear selected seats
+            selectedSeats.clear();
+            updateSelectedSeatsDisplay();
+
+            // Reload seats
+            setTimeout(() => loadSeats(), 1000);
+          } else {
+            result.innerHTML = `
+                        <div class="result-box error">
+                            <h3>❌ Đặt vé thất bại</h3>
+                            <p>${data.message}</p>
+                        </div>
+                    `;
+            log(`❌ Đặt vé thất bại: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      // Utility functions
+      function clearLogs() {
+        document.getElementById("logContainer").innerHTML = "";
+        log("Logs đã được xóa", "info");
+      }
+
+      function exportLogs() {
+        const logs = document.getElementById("logContainer").innerText;
+        const blob = new Blob([logs], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `websocket-logs-${Date.now()}.txt`;
+        a.click();
+        log("Logs đã được export", "success");
+      }
+
+      // Initialize
+      window.onload = function () {
+        log("WebSocket Testing Tool đã sẵn sàng!", "success");
+        log(
+          'Hãy nhập thông tin và click "Kết nối WebSocket" để bắt đầu',
+          "info"
+        );
+      };
+    </script>
+  </body>
+</html>
