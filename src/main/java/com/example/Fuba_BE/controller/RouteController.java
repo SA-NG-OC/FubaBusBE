@@ -25,27 +25,21 @@ import com.example.Fuba_BE.dto.Routes.RouteStopResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Route.IRouteService;
 
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/routes")
 @RequiredArgsConstructor
-@Tag(name = "Route Management", description = "APIs for managing bus routes")
 public class RouteController {
 
     private final IRouteService routeService;
 
-    @GetMapping
-    @Operation(summary = "Get all routes", description = "Retrieve routes with optional search keyword and pagination")
+        @GetMapping
     public ResponseEntity<ApiResponse<Page<RouteResponseDTO>>> getRoutes(
-            @Parameter(description = "Search keyword")
             @RequestParam(required = false) String keyword,
             
-            @Parameter(hidden = true)
+            
             @PageableDefault(
                     page = 0,
                     size = 10,
@@ -65,14 +59,12 @@ public class RouteController {
     }
 
     @GetMapping("/selection")
-    @Operation(summary = "Get routes for selection dropdown", description = "Retrieve simplified route list for dropdowns")
     public ResponseEntity<ApiResponse<List<RouteSelectionDTO>>> getRoutesForSelection() {
         List<RouteSelectionDTO> routes = routeService.getAllRoutesForSelection();
         return ResponseEntity.ok(ApiResponse.success("Route selection list retrieved", routes));
     }
 
-    @PostMapping
-    @Operation(summary = "Create new route", description = "Create a new bus route")
+        @PostMapping
     public ResponseEntity<ApiResponse<RouteResponseDTO>> createRoute(
             @Valid @RequestBody RouteRequestDTO request
     ) {
@@ -81,10 +73,8 @@ public class RouteController {
                 .body(ApiResponse.success("Route created successfully", response));
     }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "Update route", description = "Update an existing route")
+        @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> updateRoute(
-            @Parameter(description = "Route ID", required = true)
             @PathVariable Integer id,
             
             @Valid @RequestBody RouteRequestDTO request
@@ -93,10 +83,8 @@ public class RouteController {
         return ResponseEntity.ok(ApiResponse.success("Route updated successfully", response));
     }
 
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Delete route", description = "Delete a route by ID")
+        @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteRoute(
-            @Parameter(description = "Route ID", required = true)
             @PathVariable Integer id
     ) {
         routeService.deleteRoute(id);
@@ -104,7 +92,6 @@ public class RouteController {
     }
 
     @GetMapping("/route-stop")
-    @Operation(summary = "Get all route stops", description = "Retrieve all route stops")
     public ResponseEntity<ApiResponse<List<RouteStopResponseDTO>>> getRouteStop() {
         List<RouteStopResponseDTO> result = routeService.getAllRouteStop();
         return ResponseEntity.ok(ApiResponse.success("Route stops retrieved successfully", result));
