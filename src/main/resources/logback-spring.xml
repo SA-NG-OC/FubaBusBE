@@ -1,0 +1,42 @@
+<configuration>
+
+  <!-- Allow overriding from Spring: LOG_FILE (logging.file.name) -->
+  <property name="LOG_FILE" value="${LOG_FILE:-logs/app.log}"/>
+
+  <!-- FILE appender: write everything to rotating files -->
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_FILE}</file>
+    <append>true</append>
+    <immediateFlush>true</immediateFlush>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+      <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+        <maxFileSize>50MB</maxFileSize>
+      </timeBasedFileNamingAndTriggeringPolicy>
+      <maxHistory>30</maxHistory>
+      <totalSizeCap>5GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Console appender: intended for developers. Keep output compact. -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss} %-5level %logger{24} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Application logger: send app package logs to both console and file -->
+  <logger name="com.example.Fuba_BE" level="INFO" additivity="false">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="FILE"/>
+  </logger>
+
+  <!-- Root: capture warnings/errors from libraries and write to file only -->
+  <root level="WARN">
+    <appender-ref ref="FILE"/>
+  </root>
+
+</configuration>

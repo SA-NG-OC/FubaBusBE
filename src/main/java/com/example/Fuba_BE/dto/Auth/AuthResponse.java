@@ -1,0 +1,22 @@
+package com.example.Fuba_BE.dto.Auth;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuthResponse {
+
+    private String accessToken;
+    @Builder.Default
+    private String tokenType = "Bearer";
+    private Integer userId;
+    private String email;
+    private String fullName;
+    private String role;
+    private String refreshToken;
+}

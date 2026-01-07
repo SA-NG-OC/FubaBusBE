@@ -11,18 +11,19 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.Fuba_BE.dto.seat.MigrateSeatMapRequest;
 import com.example.Fuba_BE.dto.seat.SeatMapResponse;
 import com.example.Fuba_BE.payload.ApiResponse;
-import com.example.Fuba_BE.service.SeatMapService;
+import com.example.Fuba_BE.service.ISeatMapService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 
 @RestController
 @RequestMapping("/trips")
+@RequiredArgsConstructor
+@Slf4j
 public class SeatMapController {
 
-    private final SeatMapService seatMapService;
-
-    public SeatMapController(SeatMapService seatMapService) {
-        this.seatMapService = seatMapService;
-    }
+    private final ISeatMapService seatMapService;
 
         @PostMapping("/{tripId}/seat-map/migrate")
     public ResponseEntity<ApiResponse<SeatMapResponse>> migrateSeatMap(

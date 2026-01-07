@@ -1,6 +1,8 @@
 package com.example.Fuba_BE.config;
 
-import com.example.Fuba_BE.service.SeatLockService;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -11,8 +13,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import org.springframework.web.socket.messaging.SessionSubscribeEvent;
 import org.springframework.web.socket.messaging.SessionUnsubscribeEvent;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import com.example.Fuba_BE.service.ISeatLockService;
 
 /**
  * Event listener for WebSocket session lifecycle events.
@@ -28,12 +29,12 @@ public class WebSocketEventListener {
     
     private static final Logger logger = LoggerFactory.getLogger(WebSocketEventListener.class);
     
-    private final SeatLockService seatLockService;
+    private final ISeatLockService seatLockService;
     
     // Track active sessions with their user info
     private final Map<String, SessionInfo> activeSessions = new ConcurrentHashMap<>();
     
-    public WebSocketEventListener(SeatLockService seatLockService) {
+    public WebSocketEventListener(ISeatLockService seatLockService) {
         this.seatLockService = seatLockService;
     }
     

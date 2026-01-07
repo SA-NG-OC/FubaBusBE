@@ -1,9 +1,5 @@
 package com.example.Fuba_BE.controller;
 
-import com.example.Fuba_BE.dto.seat.SeatLockRequest;
-import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
-import com.example.Fuba_BE.dto.seat.SeatUnlockRequest;
-import com.example.Fuba_BE.service.SeatLockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -12,6 +8,11 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendToUser;
 import org.springframework.stereotype.Controller;
+
+import com.example.Fuba_BE.dto.seat.SeatLockRequest;
+import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
+import com.example.Fuba_BE.dto.seat.SeatUnlockRequest;
+import com.example.Fuba_BE.service.ISeatLockService;
 
 /**
  * WebSocket Controller for real-time seat locking operations.
@@ -26,10 +27,10 @@ public class SeatLockWebSocketController {
     
     private static final Logger logger = LoggerFactory.getLogger(SeatLockWebSocketController.class);
     
-    private final SeatLockService seatLockService;
+    private final ISeatLockService seatLockService;
     private final SimpMessagingTemplate messagingTemplate;
     
-    public SeatLockWebSocketController(SeatLockService seatLockService,
+    public SeatLockWebSocketController(ISeatLockService seatLockService,
                                        SimpMessagingTemplate messagingTemplate) {
         this.seatLockService = seatLockService;
         this.messagingTemplate = messagingTemplate;

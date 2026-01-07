@@ -19,6 +19,8 @@ Provide project context and coding guidelines that AI should follow when generat
 - [ ] Thêm `@Transactional` (hoặc `@Transactional(readOnly = true)`)
 - [ ] Business logic validation
 - [ ] Throw custom exceptions (`NotFoundException`, `BadRequestException`)
+- [ ] Tên Interface bắt đầu với chữ I (ví dụ: `IUserService`)
+- [ ] tên service theo dạng động từ (ví dụ: UserService, AuthService)
 - [ ] Dùng Mapper để convert Entity ↔ DTO
 - [ ] Không expose Entity ra ngoài
 
@@ -54,3 +56,4 @@ Provide project context and coding guidelines that AI should follow when generat
 - [ ] `@ExceptionHandler` trong `GlobalExceptionHandler`
 - [ ] Trả về `ApiResponse` với error code
 - [ ] Log exception với appropriate level
+- [ ] dùng lombok @Slf4j để log

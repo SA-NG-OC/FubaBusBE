@@ -1,15 +1,5 @@
 package com.example.Fuba_BE.service;
 
-import com.example.Fuba_BE.domain.entity.TripSeat;
-import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
-import com.example.Fuba_BE.repository.TripSeatRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,12 +7,23 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.Fuba_BE.domain.entity.TripSeat;
+import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
+import com.example.Fuba_BE.repository.TripSeatRepository;
+
 /**
- * Implementation of SeatLockService for real-time seat locking.
+ * Implementation of ISeatLockService for real-time seat locking.
  * Uses pessimistic locking (SELECT FOR UPDATE) for concurrency safety.
  */
 @Service
-public class SeatLockServiceImpl implements SeatLockService {
+public class SeatLockServiceImpl implements ISeatLockService {
     
     private static final Logger logger = LoggerFactory.getLogger(SeatLockServiceImpl.class);
     

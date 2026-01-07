@@ -1,11 +1,12 @@
 package com.example.Fuba_BE.config;
 
-import com.example.Fuba_BE.service.SeatLockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+
+import com.example.Fuba_BE.service.ISeatLockService;
 
 /**
  * Scheduler configuration for automatic seat lock expiration.
@@ -17,9 +18,9 @@ public class SeatLockSchedulerConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(SeatLockSchedulerConfig.class);
     
-    private final SeatLockService seatLockService;
+    private final ISeatLockService seatLockService;
     
-    public SeatLockSchedulerConfig(SeatLockService seatLockService) {
+    public SeatLockSchedulerConfig(ISeatLockService seatLockService) {
         this.seatLockService = seatLockService;
     }
     
