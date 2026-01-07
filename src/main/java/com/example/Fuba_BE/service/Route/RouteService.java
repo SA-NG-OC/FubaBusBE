@@ -54,7 +54,7 @@ public class RouteService implements IRouteService {
 
         route.setOrigin(origin);
         route.setDestination(destination);
-        if (route.getStatus() == null) route.setStatus("Hoạt động");
+        if (route.getStatus() == null) route.setStatus("Active");
 
         Route savedRoute = routeRepository.save(route);
         createRouteStops(savedRoute, origin, destination, request.getIntermediateStopNames());

@@ -2,11 +2,12 @@ package com.example.Fuba_BE.domain.enums;
 
 /**
  * Enum representing the possible statuses of a seat.
+ * Values match database constraints: Available, Held, Booked
  */
 public enum SeatStatus {
-    AVAILABLE("Trống"),
-    LOCKED("Đang giữ"),
-    BOOKED("Đã đặt");
+    Available("Available"),
+    Held("Held"),
+    Booked("Booked");
 
     private final String displayName;
 
@@ -20,7 +21,7 @@ public enum SeatStatus {
 
     /**
      * Converts a display name string to the corresponding SeatStatus enum.
-     * @param displayName The Vietnamese display name
+     * @param displayName The status name
      * @return The corresponding SeatStatus enum
      */
     public static SeatStatus fromDisplayName(String displayName) {
@@ -29,6 +30,6 @@ public enum SeatStatus {
                 return status;
             }
         }
-        return AVAILABLE; // Default to AVAILABLE if not found
+        return Available; // Default to AVAILABLE if not found
     }
 }

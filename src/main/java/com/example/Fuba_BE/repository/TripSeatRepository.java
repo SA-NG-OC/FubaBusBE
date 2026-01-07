@@ -19,6 +19,7 @@ public interface TripSeatRepository extends JpaRepository<TripSeat, Integer> {
     boolean existsByTrip_TripId(Integer tripId);
 
     void deleteByTrip_TripId(Integer tripId);
+    boolean existsByTrip_TripIdAndStatus(Integer tripId, String status);
     
     /**
      * Find a seat by ID with pessimistic write lock (SELECT ... FOR UPDATE).
@@ -40,20 +41,20 @@ public interface TripSeatRepository extends JpaRepository<TripSeat, Integer> {
      * Find all seats locked by a specific session ID.
      * Used when a user disconnects to release their locks.
      */
-    @Query("SELECT ts FROM TripSeat ts WHERE ts.lockedBySessionId = :sessionId AND ts.status = 'Đang giữ'")
+    @Query("SELECT ts FROM TripSeat ts WHERE ts.lockedBySessionId = :sessionId AND ts.status = 'Held'")
     List<TripSeat> findByLockedBySessionId(@Param("sessionId") String sessionId);
     
     /**
      * Find all seats with expired locks.
      * Used by the scheduler to auto-release expired locks.
      */
-    @Query("SELECT ts FROM TripSeat ts WHERE ts.status = 'Đang giữ' AND ts.holdExpiry < :now")
+    @Query("SELECT ts FROM TripSeat ts WHERE ts.status = 'Held' AND ts.holdExpiry < :now")
     List<TripSeat> findExpiredLocks(@Param("now") LocalDateTime now);
     
     /**
      * Find all locked seats for a specific trip.
      */
-    @Query("SELECT ts FROM TripSeat ts WHERE ts.trip.tripId = :tripId AND ts.status = 'Đang giữ'")
+    @Query("SELECT ts FROM TripSeat ts WHERE ts.trip.tripId = :tripId AND ts.status = 'Held'")
     List<TripSeat> findLockedSeatsByTripId(@Param("tripId") Integer tripId);
     
     /**
@@ -61,8 +62,8 @@ public interface TripSeatRepository extends JpaRepository<TripSeat, Integer> {
      * Returns the number of updated rows.
      */
     @Modifying
-    @Query("UPDATE TripSeat ts SET ts.status = 'Trống', ts.lockedBy = null, ts.lockedBySessionId = null, ts.holdExpiry = null " +
-           "WHERE ts.status = 'Đang giữ' AND ts.holdExpiry < :now")
+    @Query("UPDATE TripSeat ts SET ts.status = 'Available', ts.lockedBy = null, ts.lockedBySessionId = null, ts.holdExpiry = null " +
+           "WHERE ts.status = 'Held' AND ts.holdExpiry < :now")
     int releaseExpiredLocks(@Param("now") LocalDateTime now);
     
     /**
@@ -70,8 +71,8 @@ public interface TripSeatRepository extends JpaRepository<TripSeat, Integer> {
      * Returns the number of updated rows.
      */
     @Modifying
-    @Query("UPDATE TripSeat ts SET ts.status = 'Trống', ts.lockedBy = null, ts.lockedBySessionId = null, ts.holdExpiry = null " +
-           "WHERE ts.lockedBySessionId = :sessionId AND ts.status = 'Đang giữ'")
+    @Query("UPDATE TripSeat ts SET ts.status = 'Available', ts.lockedBy = null, ts.lockedBySessionId = null, ts.holdExpiry = null " +
+           "WHERE ts.lockedBySessionId = :sessionId AND ts.status = 'Held'")
     int releaseAllLocksBySessionId(@Param("sessionId") String sessionId);
     
     /**

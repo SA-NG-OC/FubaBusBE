@@ -14,12 +14,12 @@ public interface TripSeatMapper {
 
     @Named("mapSeatStatus")
     default String mapSeatStatus(String status) {
-        if (status == null) return "AVAILABLE";
+        if (status == null) return "Available";
         return switch (status) {
-            case "Trống" -> "AVAILABLE";
-            case "Đang giữ" -> "SELECTED";
-            case "Đã đặt" -> "BOOKED";
-            default -> "AVAILABLE";
+            case "Available" -> "Available";
+            case "Held" -> "SELECTED";
+            case "Booked" -> "Booked";
+            default -> "Available";
         };
     }
 }
