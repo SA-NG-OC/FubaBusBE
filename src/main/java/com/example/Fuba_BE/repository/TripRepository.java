@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -129,4 +130,67 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
     Page<Trip> findTripsByDriverOrSubDriver(@Param("driverId") Integer driverId,
                                             @Param("status") String status,
                                             Pageable pageable);
+
+    long countByDepartureTimeBetween(LocalDateTime start, LocalDateTime end);
+
+    long countByDepartureTimeBetweenAndStatus(LocalDateTime start, LocalDateTime end, String status);
+
+    @Query("SELECT COALESCE(SUM(t.basePrice), 0) FROM Trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled'")
+    BigDecimal sumRevenueByTimeRange(@Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(t) FROM Trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    long countTrips(@Param("start") LocalDateTime start,
+                    @Param("end") LocalDateTime end,
+                    @Param("routeId") Integer routeId);
+
+    @Query("SELECT COUNT(t) FROM Trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status = :status " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    long countTripsByStatus(@Param("start") LocalDateTime start,
+                            @Param("end") LocalDateTime end,
+                            @Param("status") String status,
+                            @Param("routeId") Integer routeId);
+
+    @Query("SELECT COALESCE(SUM(t.basePrice), 0) FROM Trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled' " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    BigDecimal sumTripBasePrice(@Param("start") LocalDateTime start,
+                                @Param("end") LocalDateTime end,
+                                @Param("routeId") Integer routeId);
+
+    @Query("SELECT COUNT(ts) FROM TripSeat ts " +
+            "JOIN ts.trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled' " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    long countTotalSeats(@Param("start") LocalDateTime start,
+                         @Param("end") LocalDateTime end,
+                         @Param("routeId") Integer routeId);
+
+    @Query("SELECT COUNT(ts) FROM TripSeat ts " +
+            "JOIN ts.trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled' " +
+            "AND ts.status = 'Booked' " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    long countSoldTickets(@Param("start") LocalDateTime start,
+                          @Param("end") LocalDateTime end,
+                          @Param("routeId") Integer routeId);
+
+    @Query("SELECT COALESCE(SUM(t.basePrice), 0) FROM TripSeat ts " +
+            "JOIN ts.trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled' " +
+            "AND ts.status = 'Booked' " +
+            "AND (:routeId IS NULL OR t.route.routeId = :routeId)")
+    BigDecimal sumTicketRevenue(@Param("start") LocalDateTime start,
+                                @Param("end") LocalDateTime end,
+                                @Param("routeId") Integer routeId);
 }
