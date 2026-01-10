@@ -59,13 +59,25 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
     List<Ticket> findByTripId(@Param("tripId") Integer tripId);
 
     /**
+     * Find all active tickets for a trip with seat info using JOIN FETCH.
+     * Includes Confirmed, USED, Unconfirmed tickets (excludes Cancelled).
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t " +
+           "JOIN FETCH t.booking b " +
+           "JOIN FETCH t.seat s " +
+           "WHERE b.trip.tripId = :tripId " +
+           "AND t.ticketStatus NOT IN ('Cancelled') " +
+           "AND b.bookingStatus NOT IN ('Cancelled', 'Expired')")
+    List<Ticket> findActiveTicketsByTripIdWithDetails(@Param("tripId") Integer tripId);
+
+    /**
      * Find tickets by seat IDs for a specific trip
      */
     @Query("SELECT t FROM Ticket t " +
            "JOIN t.booking b " +
            "WHERE b.trip.tripId = :tripId " +
            "AND t.seat.seatId IN :seatIds " +
-           "AND t.ticketStatus NOT IN ('CANCELLED')")
+           "AND t.ticketStatus NOT IN ('Cancelled')")
     List<Ticket> findActiveTicketsByTripAndSeats(@Param("tripId") Integer tripId, 
                                                    @Param("seatIds") List<Integer> seatIds);
 
@@ -76,7 +88,7 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
            "JOIN t.booking b " +
            "WHERE b.trip.tripId = :tripId " +
            "AND t.seat.seatId = :seatId " +
-           "AND t.ticketStatus NOT IN ('CANCELLED')")
+           "AND t.ticketStatus NOT IN ('Cancelled')")
     boolean isSeatBookedForTrip(@Param("tripId") Integer tripId, @Param("seatId") Integer seatId);
 
     /**
