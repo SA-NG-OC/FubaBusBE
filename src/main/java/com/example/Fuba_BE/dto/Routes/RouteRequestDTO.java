@@ -11,23 +11,23 @@ import java.util.List;
 @Data
 public class RouteRequestDTO {
 
-    @NotBlank(message = "Tên tuyến không được để trống")
+    @NotBlank(message = "Route name must not be blank")
     private String routeName;
 
-    @NotBlank(message = "Tên điểm đi không được để trống")
-    private String originName; // Đổi từ ID sang Name
+    @NotBlank(message = "Origin name must not be blank")
+    private String originName;
 
-    @NotBlank(message = "Tên điểm đến không được để trống")
-    private String destinationName; // Đổi từ ID sang Name
+    @NotBlank(message = "Destination name must not be blank")
+    private String destinationName;
 
-    @NotNull(message = "Khoảng cách không được để trống")
-    @Min(value = 1, message = "Khoảng cách phải lớn hơn 0")
+    @NotNull(message = "Distance must not be null")
+    @Min(value = 1, message = "Distance must be greater than 0")
     private BigDecimal distance;
 
-    @NotNull(message = "Thời gian ước tính không được để trống")
-    @Min(value = 1, message = "Thời gian phải lớn hơn 0 phút")
+    @NotNull(message = "Estimated duration must not be null")
+    @Min(value = 1, message = "Estimated duration must be greater than 0 minutes")
     private Integer estimatedDuration;
 
-    // Danh sách TÊN các trạm dừng ở giữa
-    private List<String> intermediateStopNames; // Đổi từ List<Integer> sang List<String>
+    // List of intermediate stop names
+    private List<String> intermediateStopNames;
 }
