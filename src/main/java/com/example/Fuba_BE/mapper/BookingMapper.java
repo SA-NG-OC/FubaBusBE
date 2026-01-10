@@ -56,6 +56,10 @@ public class BookingMapper {
                 .routeName(getRouteName(trip))
                 .departureTime(trip.getDepartureTime())
                 .arrivalTime(trip.getArrivalTime())
+                .pickupLocation(getPickupLocationName(trip))
+                .pickupTime(trip.getDepartureTime())
+                .dropoffLocation(getDropoffLocationName(trip))
+                .dropoffTime(trip.getArrivalTime())
                 .vehiclePlate(getVehiclePlate(trip))
                 .driverName(getDriverName(trip))
                 .build();
@@ -157,6 +161,30 @@ public class BookingMapper {
             return trip.getDriver().getUser().getFullName();
         }
         return null;
+    }
+
+    private String getPickupLocationName(Trip trip) {
+        if (trip.getRoute() == null || trip.getRoute().getOrigin() == null) {
+            return null;
+        }
+        Location origin = trip.getRoute().getOrigin();
+        // Return formatted: "LocationName, Province"
+        if (origin.getProvince() != null) {
+            return origin.getLocationName() + ", " + origin.getProvince();
+        }
+        return origin.getLocationName();
+    }
+
+    private String getDropoffLocationName(Trip trip) {
+        if (trip.getRoute() == null || trip.getRoute().getDestination() == null) {
+            return null;
+        }
+        Location destination = trip.getRoute().getDestination();
+        // Return formatted: "LocationName, Province"
+        if (destination.getProvince() != null) {
+            return destination.getLocationName() + ", " + destination.getProvince();
+        }
+        return destination.getLocationName();
     }
 
     private String getPickupAddress(Passenger passenger) {
