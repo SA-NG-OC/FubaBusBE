@@ -2,9 +2,11 @@ package com.example.Fuba_BE.service.Trip;
 
 import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.domain.enums.SeatStatus;
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
+import com.example.Fuba_BE.mapper.PassengerOnTripMapper;
 import com.example.Fuba_BE.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,6 +22,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +35,9 @@ public class TripService implements ITripService {
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final TripSeatRepository tripSeatRepository;
+    private final TicketRepository ticketRepository;
+    private final PassengerRepository passengerRepository;
+    private final PassengerOnTripMapper passengerOnTripMapper;
 
     // --- CÁC HÀM GET DỮ LIỆU ---
 
@@ -267,5 +274,56 @@ public class TripService implements ITripService {
 
         // 3. Gọi Repository (Tìm cả vai chính lẫn vai phụ)
         return tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId) {
+        // 1. Kiểm tra chuyến xe có tồn tại không
+        if (!tripRepository.existsById(tripId)) {
+            throw new ResourceNotFoundException("Trip not found with id: " + tripId);
+        }
+
+        // 2. Lấy tất cả ghế của chuyến xe
+        List<TripSeat> allSeats = tripSeatRepository.findAllSeatsByTripIdWithDetails(tripId);
+
+        // 3. Lấy tất cả vé active của chuyến xe (không bao gồm Cancelled)
+        List<Ticket> activeTickets = ticketRepository.findActiveTicketsByTripIdWithDetails(tripId);
+
+        // 4. Lấy tất cả hành khách có vé active
+        List<Passenger> passengers = passengerRepository.findAllByTripIdWithDetails(tripId);
+
+        // 5. Tạo Map để lookup nhanh: seatId -> Ticket
+        Map<Integer, Ticket> seatToTicketMap = activeTickets.stream()
+                .collect(Collectors.toMap(
+                        ticket -> ticket.getSeat().getSeatId(),
+                        ticket -> ticket,
+                        (existing, replacement) -> existing // Giữ cái đầu tiên nếu trùng
+                ));
+
+        // 6. Tạo Map để lookup nhanh: ticketId -> Passenger
+        Map<Integer, Passenger> ticketToPassengerMap = passengers.stream()
+                .collect(Collectors.toMap(
+                        passenger -> passenger.getTicket().getTicketId(),
+                        passenger -> passenger,
+                        (existing, replacement) -> existing
+                ));
+
+        // 7. Map tất cả ghế sang DTO
+        List<PassengerOnTripResponseDTO> result = new ArrayList<>();
+        for (TripSeat seat : allSeats) {
+            Ticket ticket = seatToTicketMap.get(seat.getSeatId());
+            Passenger passenger = null;
+
+            if (ticket != null) {
+                passenger = ticketToPassengerMap.get(ticket.getTicketId());
+                result.add(passengerOnTripMapper.toDTO(seat, ticket, passenger));
+            } else {
+                // Ghế trống (Available hoặc Held)
+                result.add(passengerOnTripMapper.toSeatOnlyDTO(seat));
+            }
+        }
+
+        return result;
     }
 }

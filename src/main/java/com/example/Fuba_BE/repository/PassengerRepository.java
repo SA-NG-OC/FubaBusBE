@@ -43,4 +43,16 @@ public interface PassengerRepository extends JpaRepository<Passenger, Integer> {
 
     @EntityGraph(attributePaths = {"pickupLocation", "dropoffLocation"})
     Optional<Passenger> findByTicket_TicketId(Integer ticketId);
+
+    /**
+     * Find all passengers for a trip with pickup/dropoff location info using EntityGraph.
+     */
+    @EntityGraph(attributePaths = {"pickupLocation", "dropoffLocation", "checkedInBy", "ticket"})
+    @Query("SELECT p FROM Passenger p " +
+           "JOIN p.ticket t " +
+           "JOIN t.booking b " +
+           "WHERE b.trip.tripId = :tripId " +
+           "AND t.ticketStatus NOT IN ('Cancelled') " +
+           "AND b.bookingStatus NOT IN ('Cancelled', 'Expired')")
+    List<Passenger> findAllByTripIdWithDetails(@Param("tripId") Integer tripId);
 }

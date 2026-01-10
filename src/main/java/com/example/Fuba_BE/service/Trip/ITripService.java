@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.service.Trip;
 
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,4 +26,11 @@ public interface ITripService {
     void deleteTrip(Integer tripId);
 
     Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable);
+
+    /**
+     * Get list of all passengers on a trip with seat info and ticket status.
+     * @param tripId The trip ID
+     * @return List of passengers with seat and ticket info
+     */
+    List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId);
 }
