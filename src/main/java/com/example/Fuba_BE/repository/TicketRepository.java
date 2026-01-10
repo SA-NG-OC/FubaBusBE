@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.Ticket;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -21,9 +23,18 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
     @Query("SELECT COUNT(t) FROM Ticket t WHERE t.ticketStatus IN ('Confirmed', 'USED') AND t.createdAt BETWEEN :start AND :end")
     long countSoldTickets(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    /**
-     * Find ticket by ticket code
-     */
+    @EntityGraph(attributePaths = {
+            "booking",
+            "booking.trip",
+            "booking.trip.route",
+            "booking.trip.route.origin",
+            "booking.trip.route.destination",
+            "booking.trip.vehicle",
+            "booking.trip.vehicle.vehicleType",
+            "booking.trip.driver",
+            "booking.trip.driver.user",
+            "seat"
+    })
     Optional<Ticket> findByTicketCode(String ticketCode);
 
     /**

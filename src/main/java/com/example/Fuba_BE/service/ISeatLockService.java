@@ -1,13 +1,13 @@
 package com.example.Fuba_BE.service;
 
-import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
-
 import java.util.List;
+
+import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
 
 /**
  * Service interface for real-time seat locking operations.
  */
-public interface SeatLockService {
+public interface ISeatLockService {
     
     /**
      * Lock duration in minutes (5 minutes as per requirement)

@@ -1,65 +1,109 @@
 package com.example.Fuba_BE.config;
 
-//import org.apache.catalina.filters.CorsFilter;
-import org.springframework.web.filter.CorsFilter;
+import com.example.Fuba_BE.security.CustomUserDetailsService;
+import com.example.Fuba_BE.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-// import các class filter token sau này bạn sẽ viết
-// import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final CustomUserDetailsService customUserDetailsService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+        return authConfig.getAuthenticationManager();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> {})
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        // === PUBLIC ENDPOINTS (No authentication required) ===
                         .requestMatchers(
-                                "/api/auth/**",      // Đăng nhập, Đăng ký
-                                "/user/role/Buyer",        // Xem danh sách role (Ví dụ test)
-                                "/api/public/**",
-                                "/routes/**",// Các API công khai khác
-                                "/api/trips/seats/**",
-                                "/trips/**",
-                                "/locations/**",
-                                "/vehicle/**",
-                                "/driver/**",
-                                "/dashboard/**",
-                                // WebSocket endpoints
-                                "/ws/**",
-                                "/ws",
-                                // Seat locking REST endpoints
-                                "/api/seats/**",
-                                // Booking endpoints
-                                "/bookings/**"
+                                "/auth/**",           // Authentication endpoints
+                                "/api/public/**",     // Public API
+                                "/ws/**", "/ws",      // WebSocket
+                                "/actuator/**"        // Health/metrics
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        .requestMatchers("/api/tickets/**").authenticated()
-                        .requestMatchers("/api/users/**").authenticated()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-
+                        // === TEMPORARILY ALLOW ALL FOR DEVELOPMENT ===
+                        // Comment this line and uncomment role-based policies below when ready for production
                         .anyRequest().permitAll()
-//                       .anyRequest().authenticated()
+
+                        // === ROLE-BASED AUTHORIZATION POLICIES (COMMENTED FOR DEV) ===
+                        // Uncomment the policies below when ready to enforce authentication/authorization
+
+                        // --- ADMIN ONLY ---
+                        // .requestMatchers("/admin/**").hasRole("ADMIN")
+                        // .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // .requestMatchers("/users/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "STAFF")
+
+                        // --- STAFF/EMPLOYEE ---
+                        // .requestMatchers("/employees/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.POST, "/routes/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.PUT, "/routes/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.DELETE, "/routes/**").hasRole("ADMIN")
+                        // .requestMatchers(HttpMethod.POST, "/trips/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.PUT, "/trips/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.DELETE, "/trips/**").hasRole("ADMIN")
+                        // .requestMatchers(HttpMethod.POST, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.PUT, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
+                        // .requestMatchers(HttpMethod.DELETE, "/vehicles/**").hasRole("ADMIN")
+
+                        // --- DRIVER ---
+                        // .requestMatchers("/drivers/me/**").hasRole("DRIVER")
+                        // .requestMatchers("/drivers/{driverId}/trips").hasAnyRole("ADMIN", "STAFF", "DRIVER")
+
+                        // --- USER/CUSTOMER ---
+                        // .requestMatchers(HttpMethod.GET, "/routes/**").permitAll()      // Anyone can view routes
+                        // .requestMatchers(HttpMethod.GET, "/trips/**").permitAll()       // Anyone can view trips
+                        // .requestMatchers(HttpMethod.GET, "/locations/**").permitAll()   // Anyone can view locations
+                        // .requestMatchers("/bookings/**").authenticated()                // Bookings require authentication
+                        // .requestMatchers("/tickets/**").authenticated()                 // Tickets require authentication
+                        // .requestMatchers("/api/seats/**").authenticated()               // Seat locking requires authentication
+
+                        // --- DEFAULT: All other requests require authentication ---
+                        // .anyRequest().authenticated()
                 );
 
         return http.build();
     }
 
     @Bean
-    public CorsFilter corsFilter()
-    {
+    public CorsFilter corsFilter() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.addAllowedOriginPattern("*");
         corsConfiguration.addAllowedMethod("*");

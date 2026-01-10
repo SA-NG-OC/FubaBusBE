@@ -1,5 +1,15 @@
 package com.example.Fuba_BE.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.Fuba_BE.domain.entity.Trip;
 import com.example.Fuba_BE.domain.entity.TripSeat;
 import com.example.Fuba_BE.domain.entity.Vehicle;
@@ -12,14 +22,9 @@ import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.TripSeatMapper;
 import com.example.Fuba_BE.repository.TripRepository;
 import com.example.Fuba_BE.repository.TripSeatRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
-public class SeatMapServiceImpl implements SeatMapService {
+public class SeatMapServiceImpl implements ISeatMapService {
 
     // status chuẩn để FE dễ dùng (khớp domain string hiện tại)
     private static final String STATUS_AVAILABLE = "Available";

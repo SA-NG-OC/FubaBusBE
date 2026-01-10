@@ -1,6 +1,9 @@
 package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.Passenger;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,12 +14,6 @@ import java.util.Optional;
 
 @Repository
 public interface PassengerRepository extends JpaRepository<Passenger, Integer> {
-
-    /**
-     * Find passenger by ticket ID
-     */
-    Optional<Passenger> findByTicket_TicketId(Integer ticketId);
-
     /**
      * Find all passengers for a specific booking
      */
@@ -43,4 +40,7 @@ public interface PassengerRepository extends JpaRepository<Passenger, Integer> {
            "AND p.phoneNumber = :phoneNumber")
     Optional<Passenger> findByBookingIdAndPhone(@Param("bookingId") Integer bookingId, 
                                                   @Param("phoneNumber") String phoneNumber);
+
+    @EntityGraph(attributePaths = {"pickupLocation", "dropoffLocation"})
+    Optional<Passenger> findByTicket_TicketId(Integer ticketId);
 }

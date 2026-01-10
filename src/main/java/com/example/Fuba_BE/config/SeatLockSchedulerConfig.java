@@ -6,7 +6,7 @@ import com.example.Fuba_BE.domain.entity.TripSeat;
 import com.example.Fuba_BE.repository.BookingRepository;
 import com.example.Fuba_BE.repository.TicketRepository;
 import com.example.Fuba_BE.repository.TripSeatRepository;
-import com.example.Fuba_BE.service.SeatLockService;
+import com.example.Fuba_BE.service.ISeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,9 +14,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDateTime;
 import java.util.List;
+
 
 /**
  * Scheduler configuration for automatic seat lock expiration and booking expiration.
@@ -29,11 +29,11 @@ public class SeatLockSchedulerConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(SeatLockSchedulerConfig.class);
     private static final int BOOKING_HOLD_DURATION_MINUTES = 15; // Bookings expire after 15 minutes
-    
-    private final SeatLockService seatLockService;
     private final BookingRepository bookingRepository;
     private final TicketRepository ticketRepository;
     private final TripSeatRepository tripSeatRepository;
+
+    private final ISeatLockService seatLockService;
     
     /**
      * Scheduled task to release expired seat locks.

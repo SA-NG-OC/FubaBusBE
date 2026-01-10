@@ -1,14 +1,22 @@
 package com.example.Fuba_BE.controller;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.example.Fuba_BE.dto.seat.SeatBookingConfirmRequest;
 import com.example.Fuba_BE.dto.seat.SeatStatusMessage;
 import com.example.Fuba_BE.payload.ApiResponse;
-import com.example.Fuba_BE.service.SeatLockService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.web.bind.annotation.*;
+import com.example.Fuba_BE.service.ISeatLockService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * REST Controller for seat booking confirmation.
@@ -16,18 +24,12 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/seats")
+@RequiredArgsConstructor
+@Slf4j
 public class SeatBookingController {
     
-    private static final Logger logger = LoggerFactory.getLogger(SeatBookingController.class);
-    
-    private final SeatLockService seatLockService;
+    private final ISeatLockService seatLockService;
     private final SimpMessagingTemplate messagingTemplate;
-    
-    public SeatBookingController(SeatLockService seatLockService,
-                                 SimpMessagingTemplate messagingTemplate) {
-        this.seatLockService = seatLockService;
-        this.messagingTemplate = messagingTemplate;
-    }
     
     /**
      * Confirm seat booking after successful payment.
@@ -50,7 +52,7 @@ public class SeatBookingController {
     public ResponseEntity<ApiResponse<SeatStatusMessage>> confirmBooking(
             @RequestBody SeatBookingConfirmRequest request) {
         
-        logger.info("Confirming booking - seatId: {}, tripId: {}, userId: {}, paymentId: {}", 
+        log.info("Confirming booking - seatId: {}, tripId: {}, userId: {}, paymentId: {}", 
                 request.getSeatId(), request.getTripId(), request.getUserId(), request.getPaymentId());
         
         // Validate request
@@ -71,11 +73,11 @@ public class SeatBookingController {
             // Broadcast to all subscribers
             String destination = seatLockService.getTripTopic(request.getTripId());
             messagingTemplate.convertAndSend(destination, result);
-            logger.info("Booking confirmed and broadcasted to {}", destination);
+            log.info("Booking confirmed and broadcasted to {}", destination);
             
             return ResponseEntity.ok(ApiResponse.success("Booking confirmed successfully", result));
         } else {
-            logger.warn("Booking failed: {}", result.getMessage());
+            log.warn("Booking failed: {}", result.getMessage());
             return ResponseEntity.badRequest().body(
                     ApiResponse.error(result.getMessage(), result, "BOOKING_FAILED")
             );
@@ -99,7 +101,7 @@ public class SeatBookingController {
             @RequestParam Integer tripId,
             @RequestParam String userId) {
         
-        logger.info("REST unlock request - seatId: {}, tripId: {}, userId: {}", seatId, tripId, userId);
+        log.info("REST unlock request - seatId: {}, tripId: {}, userId: {}", seatId, tripId, userId);
         
         // Use empty session ID for REST requests
         SeatStatusMessage result = seatLockService.unlockSeat(seatId, tripId, userId, "");
@@ -135,7 +137,7 @@ public class SeatBookingController {
             @PathVariable Integer seatId,
             @RequestBody LockRequest request) {
         
-        logger.info("REST lock request - seatId: {}, tripId: {}, userId: {}", 
+        log.info("REST lock request - seatId: {}, tripId: {}, userId: {}", 
                 seatId, request.getTripId(), request.getUserId());
         
         if (request.getTripId() == null || request.getUserId() == null) {
