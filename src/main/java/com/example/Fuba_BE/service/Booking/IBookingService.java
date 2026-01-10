@@ -1,14 +1,16 @@
 package com.example.Fuba_BE.service.Booking;
 
 import java.util.List;
+import java.util.Map;
 
 import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
+import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
 
 /**
  * Service interface for booking operations.
- * Handles ticket booking with seat lock validation.
+ * Handles ticket booking, seat locking, payments, and cancellations.
  */
 public interface IBookingService {
 
@@ -24,13 +26,32 @@ public interface IBookingService {
     BookingPreviewResponse previewBooking(Integer tripId, List<Integer> seatIds, String userId);
 
     /**
-     * Confirm booking after seats have been locked.
+     * Confirm booking after seats have been locked (Online booking).
      * Validates seat lock ownership and creates booking + tickets.
      *
      * @param request BookingConfirmRequest with booking details
      * @return BookingResponse with confirmed booking details
      */
     BookingResponse confirmBooking(BookingConfirmRequest request);
+
+    /**
+     * Create counter booking (direct booking without seat locking).
+     * Creates booking with BookingType=Counter and BookingStatus=Paid.
+     *
+     * @param request CounterBookingRequest with booking details
+     * @return BookingResponse with created booking details
+     */
+    BookingResponse createCounterBooking(CounterBookingRequest request);
+
+    /**
+     * Process payment for a booking.
+     * Changes booking status from Held to Paid and seats from Held to Booked.
+     *
+     * @param bookingId      The booking ID to process payment for
+     * @param paymentDetails Payment details (Map for flexibility with different gateways)
+     * @return Updated BookingResponse with Paid status
+     */
+    BookingResponse processPayment(Integer bookingId, Map<String, Object> paymentDetails);
 
     /**
      * Get booking by ID
@@ -57,12 +78,29 @@ public interface IBookingService {
     List<BookingResponse> getBookingsByCustomerId(Integer customerId);
 
     /**
+     * Get all bookings for a customer with optional status filter.
+     *
+     * @param customerId The customer ID
+     * @param status     Optional booking status (Held, Paid, Cancelled, Completed)
+     * @return List of BookingResponse
+     */
+    List<BookingResponse> getBookingsByCustomerId(Integer customerId, String status);
+
+    /**
      * Get all bookings for a trip
      *
      * @param tripId The trip ID
      * @return List of BookingResponse
      */
     List<BookingResponse> getBookingsByTripId(Integer tripId);
+
+    /**
+     * Get bookings by phone number (for guest lookup)
+     *
+     * @param phone The customer phone number
+     * @return List of BookingResponse
+     */
+    List<BookingResponse> getBookingsByPhone(String phone);
 
     /**
      * Cancel a booking
@@ -72,12 +110,4 @@ public interface IBookingService {
      * @return BookingResponse with updated status
      */
     BookingResponse cancelBooking(Integer bookingId, String userId);
-
-    /**
-     * Get bookings by phone number (for guest lookup)
-     *
-     * @param phone The customer phone number
-     * @return List of BookingResponse
-     */
-    List<BookingResponse> getBookingsByPhone(String phone);
 }

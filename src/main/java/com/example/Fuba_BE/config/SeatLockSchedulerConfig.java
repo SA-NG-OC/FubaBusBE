@@ -1,28 +1,39 @@
 package com.example.Fuba_BE.config;
 
+import com.example.Fuba_BE.domain.entity.Booking;
+import com.example.Fuba_BE.domain.entity.Ticket;
+import com.example.Fuba_BE.domain.entity.TripSeat;
+import com.example.Fuba_BE.repository.BookingRepository;
+import com.example.Fuba_BE.repository.TicketRepository;
+import com.example.Fuba_BE.repository.TripSeatRepository;
+import com.example.Fuba_BE.service.ISeatLockService;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
+import java.util.List;
 
-import com.example.Fuba_BE.service.ISeatLockService;
 
 /**
- * Scheduler configuration for automatic seat lock expiration.
- * Periodically checks for and releases expired seat locks.
+ * Scheduler configuration for automatic seat lock expiration and booking expiration.
+ * Periodically checks for and releases expired seat locks and expires held bookings.
  */
 @Configuration
 @EnableScheduling
+@RequiredArgsConstructor
 public class SeatLockSchedulerConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(SeatLockSchedulerConfig.class);
-    
+    private static final int BOOKING_HOLD_DURATION_MINUTES = 15; // Bookings expire after 15 minutes
+    private final BookingRepository bookingRepository;
+    private final TicketRepository ticketRepository;
+    private final TripSeatRepository tripSeatRepository;
+
     private final ISeatLockService seatLockService;
-    
-    public SeatLockSchedulerConfig(ISeatLockService seatLockService) {
-        this.seatLockService = seatLockService;
-    }
     
     /**
      * Scheduled task to release expired seat locks.
@@ -43,6 +54,55 @@ public class SeatLockSchedulerConfig {
             seatLockService.releaseExpiredLocks();
         } catch (Exception e) {
             logger.error("Error in scheduled task to release expired locks: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Scheduled task to expire held/pending bookings.
+     * Runs every 60 seconds to check for bookings that have been held longer than the allowed time.
+     * Bookings in 'Held' or 'Pending' status for more than BOOKING_HOLD_DURATION_MINUTES will be marked as 'Expired'
+     * (system timeout), while user-initiated cancellations will be marked as 'Cancelled'.
+     * Seats will be released back to Available status.
+     */
+    @Scheduled(fixedRate = 60000) // Every 60 seconds
+    @Transactional
+    public void expireHeldBookings() {
+        try {
+            logger.debug("Running scheduled task to expire held bookings");
+            LocalDateTime now = LocalDateTime.now();
+            
+            // Find expired bookings before updating them (using hold_expiry field)
+            List<Booking> expiredBookings = bookingRepository.findExpiredBookings(now);
+            
+            if (!expiredBookings.isEmpty()) {
+                logger.info("Found {} bookings with hold_expiry < now ({})", 
+                    expiredBookings.size(), now);
+                
+                // Release seats for each expired booking
+                int totalSeatsReleased = 0;
+                for (Booking booking : expiredBookings) {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    
+                    for (Ticket ticket : tickets) {
+                        TripSeat seat = ticket.getSeat();
+                        if (seat != null && ("Held".equals(seat.getStatus()))) {
+                            seat.release();
+                            tripSeatRepository.save(seat);
+                            totalSeatsReleased++;
+                            logger.debug("Released seat {} for expired booking {}", 
+                                seat.getSeatNumber(), booking.getBookingCode());
+                        }
+                    }
+                }
+                
+                // Update booking status to Expired (system timeout)
+                int expiredCount = bookingRepository.updateExpiredBookingsStatus(now);
+                
+                logger.info("Marked {} bookings as Expired and released {} seats", 
+                    expiredCount, totalSeatsReleased);
+            }
+        } catch (Exception e) {
+            logger.error("Error in scheduled task to expire bookings: {}", e.getMessage(), e);
         }
     }
     

@@ -4,6 +4,7 @@ import com.example.Fuba_BE.domain.entity.Booking;
 import com.example.Fuba_BE.domain.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -41,6 +42,13 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     Optional<Booking> findByBookingCode(String bookingCode);
 
     /**
+     * Find booking by booking code with pessimistic lock (for IPN concurrency safety)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.bookingCode = :bookingCode")
+    Optional<Booking> findByBookingCodeWithLock(@Param("bookingCode") String bookingCode);
+
+    /**
      * Find booking by ID with pessimistic lock
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -57,6 +65,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      */
     @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId ORDER BY b.createdAt DESC")
     List<Booking> findByCustomerId(@Param("customerId") Integer customerId);
+
+    /**
+     * Find all bookings for a customer by customer ID and status
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId AND b.bookingStatus = :status ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerIdAndBookingStatus(@Param("customerId") Integer customerId, @Param("status") String status);
 
     /**
      * Find all bookings for a trip
@@ -80,6 +94,32 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      */
     @Query("SELECT b FROM Booking b WHERE b.customerPhone = :phone ORDER BY b.createdAt DESC")
     List<Booking> findByCustomerPhone(@Param("phone") String phone);
+
+    /**
+     * Find expired bookings based on holdExpiry timestamp.
+     * CRITICAL: Use holdExpiry (not createdAt or updatedAt) to determine expiration.
+     * 
+     * Logic:
+     * - Booking created at 10:00 with holdExpiry = 10:15
+     * - User creates payment at 10:12 → holdExpiry extended to 10:27
+     * - At 10:27, if still HELD/PENDING → expire it
+     * 
+     * @param now Current timestamp
+     * @return List of bookings that have exceeded their hold time
+     */
+    @Query("SELECT b FROM Booking b WHERE b.bookingStatus IN ('Held', 'Pending') AND b.holdExpiry < :now")
+    List<Booking> findExpiredBookings(@Param("now") LocalDateTime now);
+
+    /**
+     * Bulk update expired bookings to EXPIRED status.
+     * Uses holdExpiry for accurate timeout tracking.
+     * 
+     * @param now Current timestamp
+     * @return Number of bookings updated
+     */
+    @Modifying
+    @Query("UPDATE Booking b SET b.bookingStatus = 'Expired', b.updatedAt = :now WHERE b.bookingStatus IN ('Held', 'Pending') AND b.holdExpiry < :now")
+    int updateExpiredBookingsStatus(@Param("now") LocalDateTime now);
 
     /**
      * Count bookings for a trip
