@@ -77,6 +77,18 @@ public class BookingResponse {
         @Schema(description = "Arrival time")
         private LocalDateTime arrivalTime;
 
+        @Schema(description = "Pickup location name", example = "Bến xe Miền Đông, TP.HCM")
+        private String pickupLocation;
+
+        @Schema(description = "Pickup time (same as departure time)")
+        private LocalDateTime pickupTime;
+
+        @Schema(description = "Dropoff location name", example = "Bến xe Đà Lạt")
+        private String dropoffLocation;
+
+        @Schema(description = "Estimated dropoff time (same as arrival time)")
+        private LocalDateTime dropoffTime;
+
         @Schema(description = "Vehicle license plate", example = "30A-12345")
         private String vehiclePlate;
 

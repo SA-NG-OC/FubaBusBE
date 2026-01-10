@@ -4,6 +4,7 @@ import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
+import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.BookingMapper;
@@ -177,10 +178,11 @@ public class BookingServiceImpl implements BookingService {
                 .customerEmail(request.getCustomerEmail())
                 .trip(trip)
                 .totalAmount(totalAmount)
-                .bookingStatus("Paid")
+                .bookingStatus("Held")
                 .bookingType("Online")
                 .isGuestBooking(customer == null)
                 .guestSessionId(customer == null ? request.getGuestSessionId() : null)
+                .holdExpiry(LocalDateTime.now().plusMinutes(15)) // Expires 15 minutes from now
                 .build();
 
         booking = bookingRepository.save(booking);
@@ -196,20 +198,20 @@ public class BookingServiceImpl implements BookingService {
         }
 
         for (TripSeat seat : seatsToBook) {
-            // Mark seat as booked
-            seat.book();
-            tripSeatRepository.save(seat);
+            // Keep seat as Held - will be changed to Booked when payment is processed
+            // seat.book(); // This will be called in processPayment()
+            // No need to update seat status here as it's already Held
 
             // Generate ticket code
             String ticketCode = generateTicketCode();
 
-            // Create ticket
+            // Create ticket with Unconfirmed status - will be Confirmed when payment is processed
             Ticket ticket = Ticket.builder()
                     .ticketCode(ticketCode)
                     .booking(booking)
                     .seat(seat)
                     .price(trip.getBasePrice())
-                    .ticketStatus("Confirmed")
+                    .ticketStatus("Unconfirmed")
                     .build();
 
             ticket = ticketRepository.save(ticket);
@@ -225,7 +227,7 @@ public class BookingServiceImpl implements BookingService {
             broadcastSeatUpdate(trip.getTripId(), seat);
         }
 
-        log.info("Booking {} confirmed successfully with {} tickets", bookingCode, tickets.size());
+        log.info("Booking {} created with Held status and {} tickets", bookingCode, tickets.size());
 
         // 7. Build and return response
         return bookingMapper.toBookingResponse(booking, trip, tickets);
@@ -255,6 +257,29 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByCustomerId(Integer customerId) {
         List<Booking> bookings = bookingRepository.findByCustomerId(customerId);
+        return bookings.stream()
+                .map(booking -> {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getBookingsByCustomerId(Integer customerId, String status) {
+        List<Booking> bookings;
+        if (status != null && !status.trim().isEmpty()) {
+            // Validate status (matching database constraints)
+            List<String> validStatuses = Arrays.asList("Held", "Pending", "Paid", "Cancelled", "Expired", "Completed");
+            if (!validStatuses.contains(status)) {
+                throw new BadRequestException("Invalid booking status. Valid values: Held, Pending, Paid, Cancelled, Expired, Completed");
+            }
+            bookings = bookingRepository.findByCustomerIdAndBookingStatus(customerId, status);
+        } else {
+            bookings = bookingRepository.findByCustomerId(customerId);
+        }
+        
         return bookings.stream()
                 .map(booking -> {
                     List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
@@ -295,16 +320,20 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // Check if booking can be cancelled
-        if ("Cancelled".equals(booking.getBookingStatus())) {
-            throw new BadRequestException("Booking đã được hủy trước đó");
+        // Check if booking can be cancelled (only Held, Pending, Paid can be cancelled)
+        List<String> cancellableStatuses = Arrays.asList("Held", "Pending", "Paid");
+        if (!cancellableStatuses.contains(booking.getBookingStatus())) {
+            throw new BadRequestException(
+                "Không thể hủy booking ở trạng thái: " + booking.getBookingStatus() +
+                ". Chỉ có thể hủy booking ở trạng thái: Held, Pending, Paid"
+            );
         }
 
-        // Update booking status
+        // Update booking status to Cancelled (user-initiated, different from Expired which is system timeout)
         booking.setBookingStatus("Cancelled");
         bookingRepository.save(booking);
 
-        // Release all seats
+        // Release all seats and cancel tickets
         List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
         for (Ticket ticket : tickets) {
             ticket.setTicketStatus("Cancelled");
@@ -318,7 +347,8 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        log.info("Booking {} cancelled successfully", bookingId);
+        log.info("Booking {} cancelled successfully by user. {} seats released.", 
+            booking.getBookingCode(), tickets.size());
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 
@@ -332,6 +362,113 @@ public class BookingServiceImpl implements BookingService {
                     return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
                 })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse createCounterBooking(CounterBookingRequest request) {
+        log.info("Creating counter booking for trip {} with seats {} by staff {}", 
+                request.getTripId(), request.getSeatIds(), request.getStaffUserId());
+
+        // 1. Validate trip exists
+        Trip trip = tripRepository.findById(request.getTripId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chuyến đi với ID: " + request.getTripId()));
+
+        // 2. Validate and reserve all seats with pessimistic locking
+        List<TripSeat> seatsToBook = new ArrayList<>();
+        BigDecimal totalAmount = BigDecimal.ZERO;
+
+        for (Integer seatId : request.getSeatIds()) {
+            // Use pessimistic lock to prevent concurrent booking
+            TripSeat seat = tripSeatRepository.findBySeatIdAndTripIdWithLock(seatId, request.getTripId())
+                    .orElseThrow(() -> new NotFoundException(
+                            "Ghế " + seatId + " không tồn tại trong chuyến đi này"));
+
+            // For counter booking, only check if seat is available
+            if (seat.isBooked()) {
+                throw new BadRequestException(
+                        "Ghế " + seat.getSeatNumber() + " (ID: " + seatId + ") đã được đặt");
+            }
+
+            // Skip lock validation for counter booking
+            seatsToBook.add(seat);
+            totalAmount = totalAmount.add(trip.getBasePrice());
+        }
+
+        // 3. Generate booking code
+        String bookingCode = generateBookingCode();
+
+        // 4. Find staff user (created by)
+        User staffUser = null;
+        try {
+            Integer staffId = Integer.parseInt(request.getStaffUserId());
+            staffUser = userRepository.findById(staffId).orElse(null);
+        } catch (NumberFormatException e) {
+            log.warn("Invalid staff user ID: {}", request.getStaffUserId());
+        }
+
+        // 5. Create booking with Counter type and Paid status
+        Booking booking = Booking.builder()
+                .bookingCode(bookingCode)
+                .customer(null) // Counter bookings don't link to customer account
+                .customerName(request.getCustomerName())
+                .customerPhone(request.getCustomerPhone())
+                .customerEmail(request.getCustomerEmail())
+                .trip(trip)
+                .totalAmount(totalAmount)
+                .bookingStatus("Paid")  // Counter bookings are immediately paid
+                .bookingType("Counter")  // Counter booking type
+                .isGuestBooking(true)    // Treated as guest booking
+                .createdBy(staffUser)    // Track which staff created this
+                .holdExpiry(LocalDateTime.now()) // No hold time needed, already Paid
+                .build();
+
+        booking = bookingRepository.save(booking);
+
+        // 6. Create tickets and mark seats as booked
+        List<Ticket> tickets = new ArrayList<>();
+        Map<Integer, CounterBookingRequest.PassengerInfo> passengerInfoMap = new HashMap<>();
+        
+        if (request.getPassengers() != null) {
+            for (CounterBookingRequest.PassengerInfo p : request.getPassengers()) {
+                passengerInfoMap.put(p.getSeatId(), p);
+            }
+        }
+
+        for (TripSeat seat : seatsToBook) {
+            // Mark seat as booked directly (no lock needed for counter booking)
+            seat.book();
+            tripSeatRepository.save(seat);
+
+            // Generate ticket code
+            String ticketCode = generateTicketCode();
+
+            // Create ticket
+            Ticket ticket = Ticket.builder()
+                    .ticketCode(ticketCode)
+                    .booking(booking)
+                    .seat(seat)
+                    .price(trip.getBasePrice())
+                    .ticketStatus("Confirmed")
+                    .build();
+
+            ticket = ticketRepository.save(ticket);
+            tickets.add(ticket);
+
+            // Create passenger if info provided
+            CounterBookingRequest.PassengerInfo passengerInfo = passengerInfoMap.get(seat.getSeatId());
+            if (passengerInfo != null) {
+                createPassengerForCounter(ticket, passengerInfo);
+            }
+
+            // Broadcast seat status change
+            broadcastSeatUpdate(trip.getTripId(), seat);
+        }
+
+        log.info("Counter booking {} created successfully with {} tickets", bookingCode, tickets.size());
+
+        // 7. Build and return response
+        return bookingMapper.toBookingResponse(booking, trip, tickets);
     }
 
     // ==================== Private Helper Methods ====================
@@ -471,6 +608,38 @@ public class BookingServiceImpl implements BookingService {
     }
 
     /**
+     * Create passenger record for a counter booking ticket
+     */
+    private void createPassengerForCounter(Ticket ticket, CounterBookingRequest.PassengerInfo info) {
+        // Check if passenger already exists for this ticket
+        Optional<Passenger> existingPassenger = passengerRepository.findByTicket_TicketId(ticket.getTicketId());
+        if (existingPassenger.isPresent()) {
+            log.warn("Passenger already exists for ticket {}, skipping creation", ticket.getTicketId());
+            return;
+        }
+
+        RouteStop pickupStop = null;
+        RouteStop dropoffStop = null;
+
+        if (info.getPickupStopId() != null) {
+            pickupStop = routeStopRepository.findById(info.getPickupStopId()).orElse(null);
+        }
+        if (info.getDropoffStopId() != null) {
+            dropoffStop = routeStopRepository.findById(info.getDropoffStopId()).orElse(null);
+        }
+
+        Passenger passenger = Passenger.builder()
+                .ticket(ticket)
+                .fullName(info.getPassengerName())
+                .phoneNumber(info.getPassengerPhone())
+                .pickupLocation(pickupStop)
+                .dropoffLocation(dropoffStop)
+                .build();
+
+        passengerRepository.save(passenger);
+    }
+
+    /**
      * Broadcast seat status update via WebSocket
      */
     private void broadcastSeatUpdate(Integer tripId, TripSeat seat) {
@@ -489,5 +658,66 @@ public class BookingServiceImpl implements BookingService {
         } catch (Exception e) {
             log.error("Failed to broadcast seat update: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Process payment for a booking.
+     * Changes booking status from Held to Paid and seats from Held to Booked.
+     * TODO: Implement actual payment gateway integration
+     *
+     * @param bookingId The booking ID to process payment for
+     * @param paymentDetails Payment details (to be defined based on payment gateway)
+     * @return Updated BookingResponse
+     */
+    @Override
+    @Transactional
+    public BookingResponse processPayment(Integer bookingId, Map<String, Object> paymentDetails) {
+        log.info("Processing payment for booking ID: {}", bookingId);
+
+        // 1. Get booking with lock
+        Booking booking = bookingRepository.findByIdWithLock(bookingId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
+
+        // 2. Validate booking status
+        if (!"Held".equals(booking.getBookingStatus()) && !"Pending".equals(booking.getBookingStatus())) {
+            throw new BadRequestException("Booking không ở trạng thái Held hoặc Pending. Hiện tại: " + booking.getBookingStatus());
+        }
+
+        // 3. TODO: Process payment with payment gateway
+        // For now, we'll just mark as paid
+        // In the future, integrate with payment gateway (VNPay, Momo, etc.)
+        log.warn("Payment gateway integration not yet implemented. Marking as paid directly.");
+
+        // 4. Update booking status to Paid
+        booking.setBookingStatus("Paid");
+        booking = bookingRepository.save(booking);
+
+        // 5. Get all tickets and update seat status to Booked
+        List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
+        for (Ticket ticket : tickets) {
+            // Update ticket status from Unconfirmed to Confirmed
+            ticket.setTicketStatus("Confirmed");
+            ticketRepository.save(ticket);
+
+            // Update seat status to Booked
+            TripSeat seat = ticket.getSeat();
+            if (seat != null && ("Held".equals(seat.getStatus()) || "Booked".equals(seat.getStatus()))) {
+                // Only update if not already Booked
+                if (!"Booked".equals(seat.getStatus())) {
+                    seat.book();
+                    tripSeatRepository.save(seat);
+                }
+
+                // Broadcast seat status change
+                broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
+
+                log.debug("Seat {} marked as Booked for paid booking {}", 
+                    seat.getSeatNumber(), booking.getBookingCode());
+            }
+        }
+
+        log.info("Payment processed successfully for booking {}", booking.getBookingCode());
+
+        return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 }

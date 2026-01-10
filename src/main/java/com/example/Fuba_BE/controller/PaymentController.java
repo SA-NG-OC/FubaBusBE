@@ -1,0 +1,190 @@
+package com.example.Fuba_BE.controller;
+
+import com.example.Fuba_BE.dto.payment.MomoIpnRequest;
+import com.example.Fuba_BE.dto.payment.MomoPaymentResponse;
+import com.example.Fuba_BE.dto.payment.PaymentResponse;
+import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.service.payment.MomoPaymentService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * REST Controller for MoMo payment operations.
+ * Handles payment creation and IPN callback from MoMo.
+ */
+@RestController
+@RequestMapping("/payments")
+@RequiredArgsConstructor
+@Tag(name = "Payment", description = "APIs for MoMo payment integration")
+@Slf4j
+public class PaymentController {
+
+    private final MomoPaymentService momoPaymentService;
+
+    /**
+     * Create MoMo payment for a booking
+     */
+    @PostMapping("/momo/create/{bookingId}")
+    @Operation(
+            summary = "Create MoMo payment",
+            description = "Create a MoMo payment session for a booking in Held status. " +
+                    "Returns payment URL to redirect user to MoMo payment page."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Payment created successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid booking status or MoMo error"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Booking not found"
+            )
+    })
+    public ResponseEntity<ApiResponse<PaymentResponse>> createMomoPayment(
+            @Parameter(description = "Booking ID", required = true)
+            @PathVariable Integer bookingId) {
+        
+        log.info("Creating MoMo payment for booking ID: {}", bookingId);
+        
+        PaymentResponse paymentResponse = momoPaymentService.createPayment(bookingId);
+        
+        return ResponseEntity.ok(ApiResponse.<PaymentResponse>builder()
+                .success(true)
+                .message("Tạo thanh toán MoMo thành công")
+                .data(paymentResponse)
+                .build());
+    }
+
+    /**
+     * MoMo IPN callback endpoint
+     * This is called by MoMo server after payment is processed
+     */
+    @PostMapping("/momo/ipn")
+    @Operation(
+            summary = "MoMo IPN callback",
+            description = "Instant Payment Notification callback from MoMo. " +
+                    "Called by MoMo server to notify payment result. " +
+                    "Updates booking and seat status if payment is successful."
+    )
+    public ResponseEntity<Map<String, Object>> handleMomoIpn(@RequestBody MomoIpnRequest ipnRequest) {
+        log.info("========================================");
+        log.info("📥 Received MoMo IPN Callback");
+        log.info("Order ID: {}", ipnRequest.getOrderId());
+        log.info("Request ID: {}", ipnRequest.getRequestId());
+        log.info("Result Code: {}", ipnRequest.getResultCode());
+        log.info("Message: {}", ipnRequest.getMessage());
+        log.info("Trans ID: {}", ipnRequest.getTransId());
+        log.info("Amount: {}", ipnRequest.getAmount());
+        log.info("Signature: {}", ipnRequest.getSignature());
+        log.info("========================================");
+        
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            boolean success = momoPaymentService.handleIpnCallback(ipnRequest);
+            
+            if (success) {
+                log.info("✅ IPN processed successfully for order: {}", ipnRequest.getOrderId());
+                response.put("resultCode", 0);
+                response.put("message", "Success");
+            } else {
+                log.warn("⚠️ IPN processing failed for order: {}", ipnRequest.getOrderId());
+                response.put("resultCode", 1);
+                response.put("message", "Failed to process payment");
+            }
+        } catch (Exception e) {
+            log.error("❌ Error processing MoMo IPN for order {}: {}", 
+                ipnRequest.getOrderId(), e.getMessage(), e);
+            response.put("resultCode", 99);
+            response.put("message", "Internal error: " + e.getMessage());
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * MoMo redirect endpoint after payment
+     * User is redirected here after completing payment on MoMo
+     */
+    @GetMapping("/momo/redirect")
+    @Operation(
+            summary = "MoMo redirect callback",
+            description = "Redirect URL after user completes payment on MoMo. " +
+                    "Returns payment status information."
+    )
+    public ResponseEntity<ApiResponse<Map<String, Object>>> handleMomoRedirect(
+            @RequestParam String orderId,
+            @RequestParam(required = false) String requestId,
+            @RequestParam Integer resultCode,
+            @RequestParam(required = false) String message,
+            @RequestParam(required = false) Long transId) {
+        
+        log.info("MoMo redirect: orderId={}, resultCode={}, transId={}", orderId, resultCode, transId);
+        
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderId", orderId);
+        data.put("requestId", requestId);
+        data.put("resultCode", resultCode);
+        data.put("transId", transId);
+        data.put("message", message);
+        
+        boolean success = (resultCode == 0);
+        String responseMessage = success 
+                ? "Thanh toán thành công" 
+                : "Thanh toán thất bại: " + message;
+        
+        return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                .success(success)
+                .message(responseMessage)
+                .data(data)
+                .build());
+    }
+
+    /**
+     * Query payment status from MoMo
+     */
+    @GetMapping("/momo/status")
+    @Operation(
+            summary = "Query MoMo payment status",
+            description = "Query the current status of a MoMo payment"
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Payment status retrieved successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Error querying payment status"
+            )
+    })
+    public ResponseEntity<ApiResponse<MomoPaymentResponse>> queryPaymentStatus(
+            @Parameter(description = "Order ID (Booking code)", required = true)
+            @RequestParam String orderId,
+            @Parameter(description = "Request ID from payment creation", required = true)
+            @RequestParam String requestId) {
+        
+        log.info("Querying MoMo payment status: orderId={}, requestId={}", orderId, requestId);
+        
+        MomoPaymentResponse status = momoPaymentService.queryPaymentStatus(orderId, requestId);
+        
+        return ResponseEntity.ok(ApiResponse.<MomoPaymentResponse>builder()
+                .success(status.getResultCode() == 0)
+                .message(status.getMessage())
+                .data(status)
+                .build());
+    }
+}

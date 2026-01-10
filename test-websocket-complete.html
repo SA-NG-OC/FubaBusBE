@@ -432,9 +432,25 @@
         background: #fff3cd;
         color: #856404;
       }
+      .badge.held {
+        background: #cce5ff;
+        color: #004085;
+      }
+      .badge.paid {
+        background: #d4edda;
+        color: #155724;
+      }
+      .badge.expired {
+        background: #e2e3e5;
+        color: #383d41;
+      }
       .badge.cancelled {
         background: #f8d7da;
         color: #721c24;
+      }
+      .badge.completed {
+        background: #d1ecf1;
+        color: #0c5460;
       }
     </style>
   </head>
@@ -498,6 +514,10 @@
           <button class="tab" onclick="switchTab('booking')">
             📝 Đặt vé (Booking)
           </button>
+          <button class="tab" onclick="switchTab('payment')">
+            💳 MoMo Payment
+          </button>
+
           <button class="tab" onclick="switchTab('models')">
             📊 Models & API
           </button>
@@ -632,9 +652,158 @@
           <div id="bookingResult"></div>
         </div>
 
-        <!-- Tab 3: Models & API -->
+        <!-- Tab 3: Payment Testing -->
+        <div id="tab-payment" class="tab-content">
+          <h2>💳 3. Test MoMo Payment Gateway</h2>
+
+          <div class="trip-info">
+            <h4>🔄 Payment Flow:</h4>
+            <ol style="line-height: 2">
+              <li>
+                <strong>Tạo Booking:</strong> Status = Held (15 phút timeout)
+              </li>
+              <li>
+                <strong>Tạo Payment Request:</strong> Status → Pending, nhận
+                payUrl
+              </li>
+              <li>
+                <strong>MoMo Callback (IPN):</strong> Status → Paid hoặc Failed
+              </li>
+              <li><strong>Timeout:</strong> Sau 15 phút → Expired</li>
+            </ol>
+          </div>
+
+          <h3>📝 Step 1: Tạo Booking</h3>
+          <div class="booking-form">
+            <p style="margin-bottom: 10px">
+              Sử dụng tab "Booking" để tạo booking trước, hoặc nhập Booking ID
+              có sẵn:
+            </p>
+            <div class="form-group">
+              <label>Booking ID:</label>
+              <input
+                type="number"
+                id="paymentBookingId"
+                placeholder="Nhập Booking ID"
+                style="width: 100%"
+              />
+            </div>
+            <button onclick="checkBookingStatus()" class="success">
+              🔍 Kiểm tra Booking
+            </button>
+          </div>
+
+          <div id="bookingStatusResult"></div>
+
+          <h3>💰 Step 2: Tạo Payment Request (MoMo)</h3>
+          <div class="booking-form">
+            <button
+              onclick="createMomoPayment()"
+              class="success"
+              style="font-size: 16px; padding: 15px 30px"
+            >
+              💳 Tạo MoMo Payment
+            </button>
+            <p style="margin-top: 10px; color: #666; font-size: 13px">
+              ⚠️ Booking phải ở trạng thái <span class="badge held">Held</span>
+            </p>
+          </div>
+
+          <div id="paymentCreateResult"></div>
+
+          <h3>🔔 Step 3: Simulate IPN Callback (Test)</h3>
+          <div class="booking-form">
+            <p style="margin-bottom: 15px; color: #666">
+              Simulate MoMo IPN callback để test payment completion (trong thực
+              tế MoMo sẽ tự gọi):
+            </p>
+            <div class="form-group">
+              <label>Order ID (Booking Code):</label>
+              <input
+                type="text"
+                id="ipnOrderId"
+                placeholder="BOOK-xxx"
+                style="width: 100%"
+              />
+            </div>
+            <div class="form-group">
+              <label>Result Code:</label>
+              <select id="ipnResultCode" style="width: 100%">
+                <option value="0">0 - Success (Thanh toán thành công)</option>
+                <option value="1006">1006 - Transaction Timeout</option>
+                <option value="1001">1001 - Transaction Failed</option>
+                <option value="9000">9000 - User Cancelled</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Amount:</label>
+              <input
+                type="number"
+                id="ipnAmount"
+                placeholder="200000"
+                style="width: 100%"
+              />
+            </div>
+            <button
+              onclick="simulateIpnCallback()"
+              class="success"
+              style="font-size: 16px"
+            >
+              📡 Send IPN Callback
+            </button>
+            <p style="margin-top: 10px; color: #666; font-size: 13px">
+              ℹ️ Chỉ dùng để test. Production sẽ nhận callback từ MoMo tự động.
+            </p>
+          </div>
+
+          <div id="ipnResult"></div>
+
+          <h3>📊 Step 4: Query Payment Status</h3>
+          <div class="booking-form">
+            <div class="form-group">
+              <label>Order ID (Booking Code):</label>
+              <input
+                type="text"
+                id="queryOrderId"
+                placeholder="BOOK-xxx"
+                style="width: 100%"
+              />
+            </div>
+            <button onclick="queryPaymentStatus()" class="success">
+              🔍 Query Status
+            </button>
+          </div>
+
+          <div id="queryResult"></div>
+
+          <h3>⏱️ Step 5: Test Timeout (Expired)</h3>
+          <div class="trip-info">
+            <p><strong>Cách test Expired status:</strong></p>
+            <ol style="line-height: 1.8">
+              <li>
+                Tạo booking mới (status = <span class="badge held">Held</span>)
+              </li>
+              <li>KHÔNG tạo payment hoặc thanh toán</li>
+              <li>
+                Đợi 15 phút (hoặc sửa
+                <code>BOOKING_HOLD_DURATION_MINUTES</code> trong code)
+              </li>
+              <li>
+                Scheduler sẽ tự động chuyển sang
+                <span class="badge expired">Expired</span>
+              </li>
+              <li>Ghế được release về <span class="badge">Available</span></li>
+            </ol>
+            <p style="margin-top: 10px; color: #dc3545; font-weight: bold">
+              ⚠️ Expired khác Cancelled: Expired = timeout hệ thống, Cancelled =
+              user hủy
+            </p>
+          </div>
+        </div>
+
+        <!-- Tab 4: Models & API -->
         <div id="tab-models" class="tab-content">
-          <h2>📊 4. Models & API Documentation</h2>
+          <h2>📊 5. Models & API Documentation</h2>
 
           <h3>🔗 API Endpoints</h3>
           <div class="api-endpoint">
@@ -673,6 +842,32 @@
               <span class="api-method post">POST</span>/bookings/{id}/cancel
             </div>
             <span>Hủy vé</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method post">POST</span
+              >/payments/momo/create/{bookingId}
+            </div>
+            <span>Tạo MoMo payment request</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method post">POST</span>/payments/momo/ipn
+            </div>
+            <span>MoMo IPN callback (webhook)</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method get">GET</span
+              >/payments/momo/status?orderId=xxx
+            </div>
+            <span>Query payment status</span>
+          </div>
+          <div class="api-endpoint">
+            <div>
+              <span class="api-method get">GET</span>/payments/momo/redirect
+            </div>
+            <span>Payment redirect URL</span>
           </div>
 
           <h3>📦 Data Models</h3>
@@ -743,7 +938,47 @@
   "lockedBySessionId": "user_test_1",
   "lockExpiry": "2026-01-06T10:15:00",
   "price": 150000
-}</pre>
+}
+
+<strong>PaymentResponse</strong> (MoMo Create Payment)
+{
+  "success": true,
+  "data": {
+    "partnerCode": "MOMO",
+    "orderId": "BOOK-20260109001",
+    "requestId": "uuid-xxx",
+    "amount": "200000",
+    "responseTime": 1736400000,
+    "message": "Successful.",
+    "resultCode": 0,
+    "payUrl": "https://test-payment.momo.vn/gw_payment/...",
+    "deeplink": "momo://app?action=payWithApp&...",
+    "qrCodeUrl": "https://test-payment.momo.vn/..."
+  }
+}
+
+<strong>IpnRequest</strong> (MoMo IPN Callback)
+{
+  "partnerCode": "MOMO",
+  "orderId": "BOOK-20260109001",
+  "requestId": "uuid-xxx",
+  "amount": 200000,
+  "orderInfo": "Thanh toan ve xe",
+  "orderType": "momo_wallet",
+  "transId": "123456789",
+  "resultCode": 0,
+  "message": "Successful.",
+  "payType": "qr",
+  "responseTime": 1736400000,
+  "extraData": "",
+  "signature": "hmac-sha256-signature"
+}
+
+<strong>Booking Status Flow</strong>
+Held → Pending → Paid (success)
+     ↓         ↓
+   Expired  Cancelled (user action)
+</pre>
           </div>
 
           <h3>🔄 Luồng hoạt động (Workflow)</h3>
@@ -796,9 +1031,9 @@
           </div>
         </div>
 
-        <!-- Tab 4: Logs -->
+        <!-- Tab 5: Logs -->
         <div id="tab-logs" class="tab-content">
-          <h2>📋 5. Activity Logs</h2>
+          <h2>📋 6. Activity Logs</h2>
           <div class="controls">
             <button onclick="clearLogs()" class="danger">🗑️ Xóa logs</button>
             <button onclick="exportLogs()" class="success">
@@ -1402,6 +1637,572 @@
                         </div>
                     `;
             log(`❌ Đặt vé thất bại: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      // Payment testing functions
+      async function checkBookingStatus() {
+        const bookingId = document.getElementById("paymentBookingId").value;
+        if (!bookingId) {
+          alert("Vui lòng nhập Booking ID!");
+          return;
+        }
+
+        log(`Đang kiểm tra booking ${bookingId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/bookings/${bookingId}`
+          );
+          const data = await response.json();
+          const result = document.getElementById("bookingStatusResult");
+
+          if (data.success) {
+            const booking = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ Booking Information</h3>
+                <p><strong>Booking Code:</strong> ${booking.bookingCode}</p>
+                <p><strong>Status:</strong> <span class="badge ${booking.bookingStatus.toLowerCase()}">${
+              booking.bookingStatus
+            }</span></p>
+                <p><strong>Total Amount:</strong> ${booking.totalAmount.toLocaleString()}đ</p>
+                <p><strong>Customer:</strong> ${booking.customerName} - ${
+              booking.customerPhone
+            }</p>
+                <p><strong>Tickets:</strong> ${booking.tickets.length} ghế</p>
+                ${
+                  booking.bookingStatus === "Held"
+                    ? '<p style="color: #28a745; font-weight: bold;">✅ Có thể tạo payment!</p>'
+                    : ""
+                }
+                ${
+                  booking.bookingStatus === "Pending"
+                    ? '<p style="color: #ffc107; font-weight: bold;">⏳ Đang chờ thanh toán...</p>'
+                    : ""
+                }
+                ${
+                  booking.bookingStatus === "Paid"
+                    ? '<p style="color: #007bff; font-weight: bold;">💰 Đã thanh toán!</p>'
+                    : ""
+                }
+              </div>
+            `;
+            log("✅ Lấy thông tin booking thành công", "success");
+
+            // Auto-fill order ID for IPN/Query
+            document.getElementById("ipnOrderId").value = booking.bookingCode;
+            document.getElementById("queryOrderId").value = booking.bookingCode;
+            document.getElementById("ipnAmount").value = booking.totalAmount;
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Lỗi: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function createMomoPayment() {
+        const bookingId = document.getElementById("paymentBookingId").value;
+        if (!bookingId) {
+          alert("Vui lòng nhập Booking ID!");
+          return;
+        }
+
+        log(`Đang tạo MoMo payment cho booking ${bookingId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/payments/momo/create/${bookingId}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+
+          const data = await response.json();
+          const result = document.getElementById("paymentCreateResult");
+
+          if (data.success) {
+            const payment = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ Payment Created Successfully!</h3>
+                <p><strong>Order ID:</strong> ${payment.orderId}</p>
+                <p><strong>Request ID:</strong> ${payment.requestId}</p>
+                <p><strong>Amount:</strong> ${parseInt(
+                  payment.amount
+                ).toLocaleString()}đ</p>
+                <p><strong>Message:</strong> ${payment.message}</p>
+                <div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                  <p style="font-weight: bold; color: #856404; margin-bottom: 10px;">🔗 Payment URLs:</p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>Web:</strong> <a href="${
+                      payment.payUrl
+                    }" target="_blank" style="color: #007bff;">${
+              payment.payUrl
+            }</a>
+                  </p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>App Deep Link:</strong> <code style="font-size: 11px;">${
+                      payment.deeplink
+                    }</code>
+                  </p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>QR Code:</strong> <code style="font-size: 11px;">${
+                      payment.qrCodeUrl
+                    }</code>
+                  </p>
+                </div>
+                <div style="margin-top: 15px;">
+                  <button onclick="window.open('${
+                    payment.payUrl
+                  }', '_blank')" class="success" style="font-size: 16px;">
+                    🌐 Mở MoMo Payment Page
+                  </button>
+                </div>
+                <p style="margin-top: 15px; color: #666; font-size: 13px;">
+                  ℹ️ Booking status đã chuyển sang <span class="badge pending">Pending</span>. 
+                  Sau khi thanh toán, MoMo sẽ gọi IPN callback để update status.
+                </p>
+              </div>
+            `;
+            log(`✅ Payment created: ${payment.orderId}`, "success");
+
+            // Auto-fill for IPN/Query
+            document.getElementById("ipnOrderId").value = payment.orderId;
+            document.getElementById("queryOrderId").value = payment.orderId;
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Lỗi tạo payment: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function simulateIpnCallback() {
+        const orderId = document.getElementById("ipnOrderId").value;
+        const resultCode = parseInt(
+          document.getElementById("ipnResultCode").value
+        );
+        const amount = document.getElementById("ipnAmount").value;
+
+        if (!orderId || !amount) {
+          alert("Vui lòng nhập Order ID và Amount!");
+          return;
+        }
+
+        const requestId = "TEST-" + Date.now();
+        const transId = Math.floor(Math.random() * 1000000000);
+
+        const ipnData = {
+          partnerCode: "MOMO",
+          orderId: orderId,
+          requestId: requestId,
+          amount: parseInt(amount),
+          orderInfo: "Thanh toan ve xe - " + orderId,
+          orderType: "momo_wallet",
+          transId: transId.toString(),
+          resultCode: resultCode,
+          message: resultCode === 0 ? "Successful." : "Transaction failed",
+          payType: "qr",
+          responseTime: Date.now(),
+          extraData: "",
+          signature: "test_signature_not_validated",
+        };
+
+        log(`Đang gửi IPN callback: resultCode=${resultCode}...`, "info");
+
+        try {
+          const response = await fetch(
+            "http://localhost:5230/payments/momo/ipn",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(ipnData),
+            }
+          );
+
+          const data = await response.json();
+          const result = document.getElementById("ipnResult");
+
+          if (response.ok) {
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ IPN Callback Processed</h3>
+                <p><strong>Result Code:</strong> ${ipnData.resultCode}</p>
+                <p><strong>Message:</strong> ${ipnData.message}</p>
+                <p><strong>Trans ID:</strong> ${ipnData.transId}</p>
+                ${
+                  resultCode === 0
+                    ? '<p style="color: #28a745; font-weight: bold;">✅ Booking status → <span class="badge paid">Paid</span>, Tickets → Confirmed, Seats → Booked</p>'
+                    : ""
+                }
+                ${
+                  resultCode !== 0
+                    ? '<p style="color: #dc3545; font-weight: bold;">❌ Payment failed. Booking vẫn ở trạng thái Pending.</p>'
+                    : ""
+                }
+              </div>
+            `;
+            log(`✅ IPN processed: ${ipnData.message}`, "success");
+
+            // Reload seats if connected
+            if (stompClient && stompClient.connected) {
+              setTimeout(() => loadSeats(), 1000);
+            }
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ IPN Error</h3><p>${
+              data.message || "Unknown error"
+            }</p></div>`;
+            log(`❌ IPN failed`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function queryPaymentStatus() {
+        const orderId = document.getElementById("queryOrderId").value;
+        if (!orderId) {
+          alert("Vui lòng nhập Order ID!");
+          return;
+        }
+
+        log(`Đang query payment status: ${orderId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/payments/momo/status?orderId=${orderId}`
+          );
+          const data = await response.json();
+          const result = document.getElementById("queryResult");
+
+          if (data.success) {
+            const payment = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>📊 Payment Status</h3>
+                <p><strong>Order ID:</strong> ${payment.orderId}</p>
+                <p><strong>Result Code:</strong> ${payment.resultCode} - ${
+              payment.message
+            }</p>
+                <p><strong>Amount:</strong> ${parseInt(
+                  payment.amount
+                ).toLocaleString()}đ</p>
+                ${
+                  payment.transId
+                    ? "<p><strong>Transaction ID:</strong> " +
+                      payment.transId +
+                      "</p>"
+                    : ""
+                }
+                ${
+                  payment.payType
+                    ? "<p><strong>Pay Type:</strong> " +
+                      payment.payType +
+                      "</p>"
+                    : ""
+                }
+                <p><strong>Status:</strong> ${
+                  payment.resultCode === 0
+                    ? '<span class="badge paid">Paid</span>'
+                    : '<span class="badge pending">Pending/Failed</span>'
+                }</p>
+              </div>
+            `;
+            log(`✅ Query thành công: ${payment.message}`, "success");
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Query failed: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      // Payment testing functions
+      async function checkBookingStatus() {
+        const bookingId = document.getElementById("paymentBookingId").value;
+        if (!bookingId) {
+          alert("Vui lòng nhập Booking ID!");
+          return;
+        }
+
+        log(`Đang kiểm tra booking ${bookingId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/bookings/${bookingId}`
+          );
+          const data = await response.json();
+          const result = document.getElementById("bookingStatusResult");
+
+          if (data.success) {
+            const booking = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ Booking Information</h3>
+                <p><strong>Booking Code:</strong> ${booking.bookingCode}</p>
+                <p><strong>Status:</strong> <span class="badge ${booking.bookingStatus.toLowerCase()}">${
+              booking.bookingStatus
+            }</span></p>
+                <p><strong>Total Amount:</strong> ${booking.totalAmount.toLocaleString()}đ</p>
+                <p><strong>Customer:</strong> ${booking.customerName} - ${
+              booking.customerPhone
+            }</p>
+                <p><strong>Tickets:</strong> ${booking.tickets.length} ghế</p>
+                ${
+                  booking.bookingStatus === "Held"
+                    ? '<p style="color: #28a745; font-weight: bold;">✅ Có thể tạo payment!</p>'
+                    : ""
+                }
+                ${
+                  booking.bookingStatus === "Pending"
+                    ? '<p style="color: #ffc107; font-weight: bold;">⏳ Đang chờ thanh toán...</p>'
+                    : ""
+                }
+                ${
+                  booking.bookingStatus === "Paid"
+                    ? '<p style="color: #007bff; font-weight: bold;">💰 Đã thanh toán!</p>'
+                    : ""
+                }
+              </div>
+            `;
+            log("✅ Lấy thông tin booking thành công", "success");
+
+            // Auto-fill order ID for IPN/Query
+            document.getElementById("ipnOrderId").value = booking.bookingCode;
+            document.getElementById("queryOrderId").value = booking.bookingCode;
+            document.getElementById("ipnAmount").value = booking.totalAmount;
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Lỗi: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function createMomoPayment() {
+        const bookingId = document.getElementById("paymentBookingId").value;
+        if (!bookingId) {
+          alert("Vui lòng nhập Booking ID!");
+          return;
+        }
+
+        log(`Đang tạo MoMo payment cho booking ${bookingId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/payments/momo/create/${bookingId}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+
+          const data = await response.json();
+          const result = document.getElementById("paymentCreateResult");
+
+          if (data.success) {
+            const payment = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ Payment Created Successfully!</h3>
+                <p><strong>Order ID:</strong> ${payment.orderId}</p>
+                <p><strong>Request ID:</strong> ${payment.requestId}</p>
+                <p><strong>Amount:</strong> ${parseInt(
+                  payment.amount
+                ).toLocaleString()}đ</p>
+                <p><strong>Message:</strong> ${payment.message}</p>
+                <div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                  <p style="font-weight: bold; color: #856404; margin-bottom: 10px;">🔗 Payment URLs:</p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>Web:</strong> <a href="${
+                      payment.payUrl
+                    }" target="_blank" style="color: #007bff;">${
+              payment.payUrl
+            }</a>
+                  </p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>App Deep Link:</strong> <code style="font-size: 11px;">${
+                      payment.deeplink
+                    }</code>
+                  </p>
+                  <p style="word-break: break-all; margin: 5px 0;">
+                    <strong>QR Code:</strong> <code style="font-size: 11px;">${
+                      payment.qrCodeUrl
+                    }</code>
+                  </p>
+                </div>
+                <div style="margin-top: 15px;">
+                  <button onclick="window.open('${
+                    payment.payUrl
+                  }', '_blank')" class="success" style="font-size: 16px;">
+                    🌐 Mở MoMo Payment Page
+                  </button>
+                </div>
+                <p style="margin-top: 15px; color: #666; font-size: 13px;">
+                  ℹ️ Booking status đã chuyển sang <span class="badge pending">Pending</span>. 
+                  Sau khi thanh toán, MoMo sẽ gửi IPN callback để update status.
+                </p>
+              </div>
+            `;
+            log(`✅ Payment created: ${payment.orderId}`, "success");
+
+            // Auto-fill for IPN/Query
+            document.getElementById("ipnOrderId").value = payment.orderId;
+            document.getElementById("queryOrderId").value = payment.orderId;
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Lỗi tạo payment: ${data.message}`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function simulateIpnCallback() {
+        const orderId = document.getElementById("ipnOrderId").value;
+        const resultCode = parseInt(
+          document.getElementById("ipnResultCode").value
+        );
+        const amount = document.getElementById("ipnAmount").value;
+
+        if (!orderId || !amount) {
+          alert("Vui lòng nhập Order ID và Amount!");
+          return;
+        }
+
+        const requestId = "TEST-" + Date.now();
+        const transId = Math.floor(Math.random() * 1000000000);
+
+        const ipnData = {
+          partnerCode: "MOMO",
+          orderId: orderId,
+          requestId: requestId,
+          amount: parseInt(amount),
+          orderInfo: "Thanh toan ve xe - " + orderId,
+          orderType: "momo_wallet",
+          transId: transId.toString(),
+          resultCode: resultCode,
+          message: resultCode === 0 ? "Successful." : "Transaction failed",
+          payType: "qr",
+          responseTime: Date.now(),
+          extraData: "",
+          signature: "test_signature_not_validated",
+        };
+
+        log(`Đang gửi IPN callback: resultCode=${resultCode}...`, "info");
+
+        try {
+          const response = await fetch(
+            "http://localhost:5230/payments/momo/ipn",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(ipnData),
+            }
+          );
+
+          const data = await response.json();
+          const result = document.getElementById("ipnResult");
+
+          if (response.ok) {
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>✅ IPN Callback Processed</h3>
+                <p><strong>Result Code:</strong> ${ipnData.resultCode}</p>
+                <p><strong>Message:</strong> ${ipnData.message}</p>
+                <p><strong>Trans ID:</strong> ${ipnData.transId}</p>
+                ${
+                  resultCode === 0
+                    ? '<p style="color: #28a745; font-weight: bold;">✅ Booking status → <span class="badge paid">Paid</span>, Tickets → Confirmed, Seats → Booked</p>'
+                    : ""
+                }
+                ${
+                  resultCode !== 0
+                    ? '<p style="color: #dc3545; font-weight: bold;">❌ Payment failed. Booking vẫn ở trạng thái Pending.</p>'
+                    : ""
+                }
+              </div>
+            `;
+            log(`✅ IPN processed: ${ipnData.message}`, "success");
+
+            // Reload seats if connected
+            if (stompClient && stompClient.connected) {
+              setTimeout(() => loadSeats(), 1000);
+            }
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ IPN Error</h3><p>${
+              data.message || "Unknown error"
+            }</p></div>`;
+            log(`❌ IPN failed`, "error");
+          }
+        } catch (error) {
+          log(`❌ Lỗi: ${error.message}`, "error");
+        }
+      }
+
+      async function queryPaymentStatus() {
+        const orderId = document.getElementById("queryOrderId").value;
+        if (!orderId) {
+          alert("Vui lòng nhập Order ID!");
+          return;
+        }
+
+        log(`Đang query payment status: ${orderId}...`, "info");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5230/payments/momo/status?orderId=${orderId}`
+          );
+          const data = await response.json();
+          const result = document.getElementById("queryResult");
+
+          if (data.success) {
+            const payment = data.data;
+            result.innerHTML = `
+              <div class="result-box">
+                <h3>📊 Payment Status</h3>
+                <p><strong>Order ID:</strong> ${payment.orderId}</p>
+                <p><strong>Result Code:</strong> ${payment.resultCode} - ${
+              payment.message
+            }</p>
+                <p><strong>Amount:</strong> ${parseInt(
+                  payment.amount
+                ).toLocaleString()}đ</p>
+                ${
+                  payment.transId
+                    ? "<p><strong>Transaction ID:</strong> " +
+                      payment.transId +
+                      "</p>"
+                    : ""
+                }
+                ${
+                  payment.payType
+                    ? "<p><strong>Pay Type:</strong> " +
+                      payment.payType +
+                      "</p>"
+                    : ""
+                }
+                <p><strong>Status:</strong> ${
+                  payment.resultCode === 0
+                    ? '<span class="badge paid">Paid</span>'
+                    : '<span class="badge pending">Pending/Failed</span>'
+                }</p>
+              </div>
+            `;
+            log(`✅ Query thành công: ${payment.message}`, "success");
+          } else {
+            result.innerHTML = `<div class="result-box error"><h3>❌ Error</h3><p>${data.message}</p></div>`;
+            log(`❌ Query failed: ${data.message}`, "error");
           }
         } catch (error) {
           log(`❌ Lỗi: ${error.message}`, "error");

@@ -3,6 +3,7 @@ package com.example.Fuba_BE.controller;
 import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
+import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Booking.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST Controller for booking operations.
@@ -111,6 +113,46 @@ public class BookingController {
     }
 
     /**
+     * Create counter booking (direct booking without seat locking).
+     */
+    @PostMapping("/counter")
+    @Operation(
+            summary = "Create counter booking",
+            description = "Create booking at the counter without seat locking. " +
+                    "Bypasses the seat lock mechanism and creates booking directly with Paid status. " +
+                    "BookingType will be set to Counter and BookingStatus to Paid."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "Counter booking created successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid request or seats not available"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Trip or seat not found"
+            )
+    })
+    public ResponseEntity<ApiResponse<BookingResponse>> createCounterBooking(
+            @Valid @RequestBody CounterBookingRequest request) {
+        
+        log.info("Counter booking request: tripId={}, seatIds={}, staff={}", 
+                request.getTripId(), request.getSeatIds(), request.getStaffUserId());
+        
+        BookingResponse booking = bookingService.createCounterBooking(request);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.<BookingResponse>builder()
+                        .success(true)
+                        .message("Bán vé tại quầy thành công")
+                        .data(booking)
+                        .build());
+    }
+
+    /**
      * Get booking by ID
      */
     @GetMapping("/{bookingId}")
@@ -178,7 +220,7 @@ public class BookingController {
     @GetMapping("/customer/{customerId}")
     @Operation(
             summary = "Get bookings by customer",
-            description = "Retrieve all bookings for a specific customer"
+            description = "Retrieve all bookings for a specific customer with optional status filter"
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -188,9 +230,11 @@ public class BookingController {
     })
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByCustomerId(
             @Parameter(description = "Customer ID", required = true)
-            @PathVariable Integer customerId) {
+            @PathVariable Integer customerId,
+            @Parameter(description = "Booking status filter (Held, Paid, Cancelled, Completed)", required = false)
+            @RequestParam(required = false) String status) {
         
-        List<BookingResponse> bookings = bookingService.getBookingsByCustomerId(customerId);
+        List<BookingResponse> bookings = bookingService.getBookingsByCustomerId(customerId, status);
         
         return ResponseEntity.ok(ApiResponse.<List<BookingResponse>>builder()
                 .success(true)
@@ -289,6 +333,47 @@ public class BookingController {
                 .success(true)
                 .message("Lấy danh sách booking thành công")
                 .data(bookings)
+                .build());
+    }
+
+    /**
+     * Process payment for a booking (direct payment without gateway)
+     * Use /payments/momo/create/{bookingId} for MoMo payment integration
+     */
+    @PostMapping("/{bookingId}/payment")
+    @Operation(
+            summary = "Process direct payment for booking",
+            description = "Process direct payment for a booking in Held status. Changes booking to Paid and seats to Booked. " +
+                    "For MoMo payment, use /payments/momo/create/{bookingId} instead."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Payment processed successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid booking status or payment failed"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Booking not found"
+            )
+    })
+    public ResponseEntity<ApiResponse<BookingResponse>> processPayment(
+            @Parameter(description = "Booking ID", required = true)
+            @PathVariable Integer bookingId,
+            @Parameter(description = "Payment details (optional)", required = false)
+            @RequestBody(required = false) Map<String, Object> paymentDetails) {
+        
+        log.info("Processing direct payment for booking ID: {}", bookingId);
+        
+        BookingResponse booking = bookingService.processPayment(bookingId, paymentDetails);
+        
+        return ResponseEntity.ok(ApiResponse.<BookingResponse>builder()
+                .success(true)
+                .message("Thanh toán thành công")
+                .data(booking)
                 .build());
     }
 }

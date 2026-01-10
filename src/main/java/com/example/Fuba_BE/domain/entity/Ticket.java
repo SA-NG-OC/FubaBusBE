@@ -37,7 +37,7 @@ public class Ticket {
 
     @Column(name = "ticketstatus")
     @Builder.Default
-    private String ticketStatus = "PENDING";
+    private String ticketStatus = "Unconfirmed";
 
     @Column(name = "requirespassengerinfo")
     @Builder.Default

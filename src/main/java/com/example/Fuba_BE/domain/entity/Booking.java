@@ -66,20 +66,31 @@ public class Booking {
     @JoinColumn(name = "createdby")
     private User createdBy;
 
-    @Column(name = "createdat")
+    @Column(name = "createdat", updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updatedat")
     private LocalDateTime updatedAt;
 
+    @Column(name = "holdexpiry", nullable = false)
+    private LocalDateTime holdExpiry;
+
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+        // Set default hold expiry to 15 minutes from creation
+        // This will be overridden by booking service if needed
+        if (holdExpiry == null) {
+            holdExpiry = now.plusMinutes(15);
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        // CRITICAL: Never update createdAt or holdExpiry in @PreUpdate
+        // holdExpiry should only be set explicitly by business logic
     }
 }
