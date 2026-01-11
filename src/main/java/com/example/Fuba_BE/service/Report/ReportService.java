@@ -27,7 +27,7 @@ public class ReportService implements IReportService {
 
         long total = tripRepository.countTrips(start, end, routeId);
         long completed = tripRepository.countTripsByStatus(start, end, TripStatus.COMPLETED.getDisplayName(), routeId);
-        long cancelled = tripRepository.countTripsByStatus(start, end, TripStatus.CANCELLED.getDisplayName(), routeId);
+        long cancelled = tripRepository.countTripsByStatus(start, end, TripStatus.Cancelled.getDisplayName(), routeId);
         long delayed = tripRepository.countTripsByStatus(start, end, TripStatus.DELAYED.getDisplayName(), routeId);
         long running = tripRepository.countTripsByStatus(start, end, TripStatus.RUNNING.getDisplayName(), routeId);
         long waiting = tripRepository.countTripsByStatus(start, end, TripStatus.WAITING.getDisplayName(), routeId);

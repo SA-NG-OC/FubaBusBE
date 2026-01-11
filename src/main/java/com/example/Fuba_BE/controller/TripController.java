@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -142,5 +143,20 @@ public class TripController {
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
 
         return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
+    }
+
+    /**
+     * Get list of all passengers on a specific trip with seat info and ticket status.
+     * Returns all seats (both occupied and empty) with passenger/ticket info if booked.
+     * 
+     * @param tripId The trip ID to get passengers for
+     * @return List of passengers with seat, ticket, and checkin information
+     */
+    @GetMapping("/{tripId}/passengers")
+    public ResponseEntity<ApiResponse<List<PassengerOnTripResponseDTO>>> getPassengersOnTrip(
+            @PathVariable Integer tripId
+    ) {
+        List<PassengerOnTripResponseDTO> passengers = tripService.getPassengersOnTrip(tripId);
+        return ResponseEntity.ok(ApiResponse.success("Passengers on trip retrieved successfully", passengers));
     }
 }
