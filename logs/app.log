@@ -1,0 +1,4 @@
+2026-01-12 01:23:03.872 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Starting FubaBeApplication using Java 23.0.2 with PID 28592 (D:\OOAD\DoAn\FubaBusBE\target\classes started by QuocThang in D:\OOAD\DoAn\FubaBusBE)
+2026-01-12 01:23:03.876 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - No active profile set, falling back to 1 default profile: "default"
+2026-01-12 01:23:22.067 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Started FubaBeApplication in 18.493 seconds (process running for 18.911)
+2026-01-12 01:23:22.133 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Fuba_BE application started successfully.
