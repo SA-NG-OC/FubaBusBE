@@ -115,4 +115,14 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
      */
     @Query("SELECT COUNT(t) FROM Ticket t WHERE t.booking.bookingId = :bookingId")
     Long countByBookingId(@Param("bookingId") Integer bookingId);
+
+    @Query("SELECT COUNT(tk) " +
+            "FROM Ticket tk " +
+            "JOIN tk.booking b " +
+            "JOIN b.trip t " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND tk.ticketStatus IN ('Confirmed', 'Used') " +
+            "AND t.status != 'Cancelled'")
+    Long countSoldTicketsBetween(@Param("start") LocalDateTime start,
+                                 @Param("end") LocalDateTime end);
 }

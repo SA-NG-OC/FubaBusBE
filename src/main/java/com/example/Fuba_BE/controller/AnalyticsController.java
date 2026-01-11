@@ -3,17 +3,16 @@ package com.example.Fuba_BE.controller;
 import com.example.Fuba_BE.dto.AdminReport.ChartDataRes;
 import com.example.Fuba_BE.dto.AdminReport.DashboardSummaryRes;
 import com.example.Fuba_BE.dto.AdminReport.RouteAnalyticsRes;
+import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Analytics.IAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -25,57 +24,91 @@ public class AnalyticsController {
 
     private final IAnalyticsService analyticsService;
 
-    // 1. Lấy thông tin tổng quan (KPI Cards)
+    // 1. KPI Summary
     @GetMapping("/summary")
-    public ResponseEntity<DashboardSummaryRes> getSummary(
+    public ResponseEntity<ApiResponse<DashboardSummaryRes>> getSummary(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year) {
 
         if (month == null) month = LocalDate.now().getMonthValue();
         if (year == null) year = LocalDate.now().getYear();
 
-        return ResponseEntity.ok(analyticsService.getDashboardSummary(month, year));
+        DashboardSummaryRes summary =
+                analyticsService.getDashboardSummary(month, year);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Dashboard summary retrieved successfully", summary)
+        );
     }
 
-    // 2. Biểu đồ Doanh thu theo Thứ
+    // 2. Revenue by Day of Week
     @GetMapping("/revenue-weekly")
-    public ResponseEntity<List<ChartDataRes>> getWeeklyRevenue(
+    public ResponseEntity<ApiResponse<List<ChartDataRes>>> getWeeklyRevenue(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year) {
 
         if (month == null) month = LocalDate.now().getMonthValue();
         if (year == null) year = LocalDate.now().getYear();
 
-        return ResponseEntity.ok(analyticsService.getRevenueByDayOfWeek(month, year));
+        List<ChartDataRes> data =
+                analyticsService.getRevenueByDayOfWeek(month, year);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Weekly revenue data retrieved successfully", data)
+        );
     }
 
-    // 3. Biểu đồ Khung giờ
+    // 3. Revenue by Shift
     @GetMapping("/revenue-shifts")
-    public ResponseEntity<List<ChartDataRes>> getShiftRevenue(
+    public ResponseEntity<ApiResponse<List<ChartDataRes>>> getShiftRevenue(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year) {
 
         if (month == null) month = LocalDate.now().getMonthValue();
         if (year == null) year = LocalDate.now().getYear();
 
-        return ResponseEntity.ok(analyticsService.getRevenueByShift(month, year));
+        List<ChartDataRes> data =
+                analyticsService.getRevenueByShift(month, year);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Shift revenue data retrieved successfully", data)
+        );
     }
 
-    // 4. Danh sách Top Routes (Có phân trang)
+    // 4. Top Routes (Pagination)
     @GetMapping("/top-routes")
-    public ResponseEntity<Page<RouteAnalyticsRes>> getTopRoutes(
+    public ResponseEntity<ApiResponse<Page<RouteAnalyticsRes>>> getTopRoutes(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) { // Mặc định top 10
+            @RequestParam(defaultValue = "10") int size) {
 
         if (month == null) month = LocalDate.now().getMonthValue();
         if (year == null) year = LocalDate.now().getYear();
 
-        // FIX: Bỏ Sort.by("totalRevenue") đi để tránh lỗi SQL
-        // Chỉ tạo PageRequest với page và size.
         Pageable pageable = PageRequest.of(page, size);
 
-        return ResponseEntity.ok(analyticsService.getRouteAnalytics(month, year, pageable));
+        Page<RouteAnalyticsRes> routes =
+                analyticsService.getRouteAnalytics(month, year, pageable);
+
+        return ResponseEntity.ok(
+                ApiResponse.success("Top routes retrieved successfully", routes)
+        );
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportReport(
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year) {
+
+        if (month == null) month = LocalDate.now().getMonthValue();
+        if (year == null) year = LocalDate.now().getYear();
+
+        byte[] excelContent = analyticsService.exportMonthlyReport(month, year);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=report_" + month + "_" + year + ".xlsx")
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)
+                .body(excelContent);
     }
 }

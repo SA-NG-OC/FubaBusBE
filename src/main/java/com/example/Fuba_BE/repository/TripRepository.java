@@ -193,4 +193,13 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
     BigDecimal sumTicketRevenue(@Param("start") LocalDateTime start,
                                 @Param("end") LocalDateTime end,
                                 @Param("routeId") Integer routeId);
+
+    @Query("SELECT SUM(vt.totalSeats) " +
+            "FROM Trip t " +
+            "JOIN t.vehicle v " +
+            "JOIN v.vehicleType vt " +
+            "WHERE t.departureTime BETWEEN :start AND :end " +
+            "AND t.status != 'Cancelled'") // Không tính chuyến bị hủy
+    Long sumTotalCapacityBetween(@Param("start") LocalDateTime start,
+                                 @Param("end") LocalDateTime end);
 }

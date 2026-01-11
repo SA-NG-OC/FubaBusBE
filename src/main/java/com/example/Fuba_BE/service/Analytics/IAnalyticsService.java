@@ -13,4 +13,5 @@ public interface IAnalyticsService {
     List<ChartDataRes> getRevenueByDayOfWeek(int month, int year);
     List<ChartDataRes> getRevenueByShift(int month, int year);
     Page<RouteAnalyticsRes> getRouteAnalytics(int month, int year, Pageable pageable);
+    byte[] exportMonthlyReport(int month, int year);
 }
