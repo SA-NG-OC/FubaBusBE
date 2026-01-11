@@ -69,7 +69,7 @@ public class TripController {
             return dto;
         });
 
-        // --- SỬA LẠI: GỌI SERVICE ĐỂ FILL DATA ---
+        // --- TODO: GỌI SERVICE ĐỂ FILL DATA ---
         // Để code Controller sạch, hãy nhờ bạn Backend implement hàm fillStats trong Service
         // Nhưng tạm thời bạn có thể dùng cách dưới đây trong TripService:
 

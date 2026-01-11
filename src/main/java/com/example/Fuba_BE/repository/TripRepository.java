@@ -213,4 +213,12 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
 
     @Query("SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip.tripId = :tripId AND ts.status IN ('Booked', 'Sold')")
     int countBookedSeats(@Param("tripId") Integer tripId);
+
+    @Query("SELECT SUM(vt.totalSeats) FROM Trip t " +
+            "JOIN t.vehicle v " +
+            "JOIN v.vehicleType vt " +
+            "WHERE t.departureTime >= :start AND t.departureTime <= :end " +
+            "AND t.status <> 'Cancelled'")
+    Long sumTotalCapacityBetween(@Param("start") LocalDateTime start,
+                                 @Param("end") LocalDateTime end);
 }

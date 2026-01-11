@@ -30,6 +30,9 @@ public class TripCreateRequestDTO {
     @NotNull(message = "Departure time is required")
     private LocalTime departureTime;
 
+    @NotNull(message = "Arrival time is required")
+    private LocalTime arrivalTime;
+
     @NotNull(message = "Price is required")
     @Min(value = 0, message = "Price must be greater than or equal to 0")
     private BigDecimal price;
