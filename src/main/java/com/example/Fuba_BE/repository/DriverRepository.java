@@ -10,6 +10,9 @@ public interface DriverRepository extends JpaRepository<Driver, Integer> {
     @Query("SELECT COUNT(d) FROM Driver d WHERE d.licenseExpiry >= CURRENT_DATE")
     long countActiveDrivers();
 
-    @Query("SELECT d FROM Driver d JOIN FETCH d.user")
-    List<Driver> findAllWithUser();
+    @Query("SELECT d FROM Driver d " +
+            "JOIN FETCH d.user u " +
+            "JOIN u.role r " +
+            "WHERE r.roleName = 'DRIVER'") // Chỉ lấy role chuẩn DRIVER
+    List<Driver> findAllWithUserAndRoleDriver();
 }
