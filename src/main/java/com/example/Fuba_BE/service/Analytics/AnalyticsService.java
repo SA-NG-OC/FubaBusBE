@@ -17,6 +17,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -62,36 +63,56 @@ public class AnalyticsService implements IAnalyticsService {
     @Override
     public List<ChartDataRes> getRevenueByDayOfWeek(int month, int year) {
         YearMonth ym = YearMonth.of(year, month);
-        return tripCostRepository.getRevenueByDayOfWeek(
-                ym.atDay(1).atStartOfDay(),
-                ym.atEndOfMonth().atTime(23, 59, 59)
-        );
+        LocalDateTime start = ym.atDay(1).atStartOfDay();
+        LocalDateTime end = ym.atEndOfMonth().atTime(23, 59, 59);
+
+        List<Object[]> results = tripCostRepository.getRevenueByDayOfWeek(start, end);
+
+        // Map từ Object[] sang DTO
+        return results.stream()
+                .map(row -> new ChartDataRes(
+                        (String) row[0],           // label (1, 2, 3...)
+                        (BigDecimal) row[1]        // revenue
+                ))
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<ChartDataRes> getRevenueByShift(int month, int year) {
         YearMonth ym = YearMonth.of(year, month);
-        return tripCostRepository.getRevenueByShift(
-                ym.atDay(1).atStartOfDay(),
-                ym.atEndOfMonth().atTime(23, 59, 59)
-        );
+        LocalDateTime start = ym.atDay(1).atStartOfDay();
+        LocalDateTime end = ym.atEndOfMonth().atTime(23, 59, 59);
+
+        List<Object[]> results = tripCostRepository.getRevenueByShift(start, end);
+
+        // Map từ Object[] sang DTO
+        return results.stream()
+                .map(row -> new ChartDataRes(
+                        (String) row[0],           // label (Morning, Afternoon...)
+                        (BigDecimal) row[1]        // revenue
+                ))
+                .collect(Collectors.toList());
     }
 
     @Override
     public Page<RouteAnalyticsRes> getRouteAnalytics(int month, int year, Pageable pageable) {
         YearMonth ym = YearMonth.of(year, month);
+        LocalDateTime start = ym.atDay(1).atStartOfDay();
+        LocalDateTime end = ym.atEndOfMonth().atTime(23, 59, 59);
 
-        // Mặc định sort theo doanh thu giảm dần nếu user không request sort khác
-        if (pageable.getSort().isUnsorted()) {
-            pageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                    Sort.by("totalRevenue").descending());
-        }
+        // Mặc định sort nếu chưa có (Native Query cần sort thủ công hoặc qua Pageable cẩn thận)
+        // Lưu ý: Với Native Query, sort field phải khớp tên cột trong SELECT (ví dụ: totalRevenue)
 
-        return routeRepository.findRoutesWithAnalytics(
-                ym.atDay(1).atStartOfDay(),
-                ym.atEndOfMonth().atTime(23, 59, 59),
-                pageable
-        );
+        Page<Object[]> rawPage = routeRepository.findRoutesWithAnalytics(start, end, pageable);
+
+        // Map từ Object[] sang DTO RouteAnalyticsRes
+        return rawPage.map(row -> new RouteAnalyticsRes(
+                (Integer) row[0],                // routeId
+                (String) row[1],                 // routeName
+                (BigDecimal) row[2],             // totalRevenue
+                ((Number) row[3]).longValue(),   // vehicleCount (Postgres trả về BigInteger)
+                ((Number) row[4]).longValue()    // driverCount
+        ));
     }
 
     // Helper tính % tăng trưởng

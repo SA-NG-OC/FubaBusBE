@@ -1,7 +1,6 @@
 package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.TripCost;
-import com.example.Fuba_BE.dto.AdminReport.ChartDataRes;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,7 +13,7 @@ import java.util.List;
 @Repository
 public interface TripCostRepository extends JpaRepository<TripCost, Integer> {
 
-    // 1. Tổng hợp Doanh thu, Chi phí, Lợi nhuận trong khoảng thời gian
+    // 1. Các hàm tính tổng (Giữ nguyên JPQL vì đơn giản và đúng chuẩn)
     @Query("SELECT SUM(tc.revenue) FROM TripCost tc WHERE tc.calculatedAt BETWEEN :start AND :end")
     BigDecimal sumRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
@@ -24,33 +23,38 @@ public interface TripCostRepository extends JpaRepository<TripCost, Integer> {
     @Query("SELECT SUM(tc.profit) FROM TripCost tc WHERE tc.calculatedAt BETWEEN :start AND :end")
     BigDecimal sumProfitBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // 2. Query biểu đồ Doanh thu theo Ngày trong tuần (Sử dụng function của DB để lấy thứ)
-    // Lưu ý: function DAYOFWEEK/ISODOW tùy thuộc vào DB (PostgreSQL dùng function native khác H2/MySQL)
-    // Ở đây tôi dùng generic approach, hoặc bạn có thể group by Java.
-    // Dưới đây là ví dụ tương thích PostgreSQL (extract dow)
-    @Query(value = "SELECT new com.example.Fuba_BE.domain.dto.response.ChartDataRes(" +
-            "CAST(FUNCTION('extract', 'isodow', t.departureTime) AS string), SUM(tc.revenue)) " +
-            "FROM TripCost tc JOIN tc.trip t " +
-            "WHERE t.departureTime BETWEEN :start AND :end " +
-            "GROUP BY FUNCTION('extract', 'isodow', t.departureTime) " +
-            "ORDER BY FUNCTION('extract', 'isodow', t.departureTime)")
-    List<ChartDataRes> getRevenueByDayOfWeek(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    // 2. Query biểu đồ theo Thứ (Sửa thành NATIVE QUERY)
+    // Trả về Object[]: index 0 là Label (String), index 1 là Revenue (BigDecimal)
+    @Query(value = """
+            SELECT 
+                CAST(EXTRACT(ISODOW FROM t.departuretime) AS TEXT) as label, 
+                SUM(tc.revenue) as value
+            FROM tripcosts tc 
+            JOIN trips t ON tc.tripid = t.tripid
+            WHERE t.departuretime BETWEEN :start AND :end
+            GROUP BY EXTRACT(ISODOW FROM t.departuretime)
+            ORDER BY EXTRACT(ISODOW FROM t.departuretime)
+            """, nativeQuery = true)
+    List<Object[]> getRevenueByDayOfWeek(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // 3. Query biểu đồ Doanh thu theo Khung giờ (Sáng, Trưa, Tối)
-    @Query("SELECT new com.example.Fuba_BE.domain.dto.response.ChartDataRes(" +
-            "CASE " +
-            "  WHEN FUNCTION('hour', t.departureTime) BETWEEN 0 AND 11 THEN 'Morning' " +
-            "  WHEN FUNCTION('hour', t.departureTime) BETWEEN 12 AND 17 THEN 'Afternoon' " +
-            "  ELSE 'Evening' " +
-            "END, " +
-            "SUM(tc.revenue)) " +
-            "FROM TripCost tc JOIN tc.trip t " +
-            "WHERE t.departureTime BETWEEN :start AND :end " +
-            "GROUP BY " +
-            "CASE " +
-            "  WHEN FUNCTION('hour', t.departureTime) BETWEEN 0 AND 11 THEN 'Morning' " +
-            "  WHEN FUNCTION('hour', t.departureTime) BETWEEN 12 AND 17 THEN 'Afternoon' " +
-            "  ELSE 'Evening' " +
-            "END")
-    List<ChartDataRes> getRevenueByShift(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    // 3. Query biểu đồ theo Khung giờ (Sửa thành NATIVE QUERY)
+    @Query(value = """
+            SELECT 
+                CASE 
+                    WHEN EXTRACT(HOUR FROM t.departuretime) BETWEEN 0 AND 11 THEN 'Morning'
+                    WHEN EXTRACT(HOUR FROM t.departuretime) BETWEEN 12 AND 17 THEN 'Afternoon'
+                    ELSE 'Evening'
+                END as label,
+                SUM(tc.revenue) as value
+            FROM tripcosts tc 
+            JOIN trips t ON tc.tripid = t.tripid
+            WHERE t.departuretime BETWEEN :start AND :end
+            GROUP BY 
+                CASE 
+                    WHEN EXTRACT(HOUR FROM t.departuretime) BETWEEN 0 AND 11 THEN 'Morning'
+                    WHEN EXTRACT(HOUR FROM t.departuretime) BETWEEN 12 AND 17 THEN 'Afternoon'
+                    ELSE 'Evening'
+                END
+            """, nativeQuery = true)
+    List<Object[]> getRevenueByShift(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

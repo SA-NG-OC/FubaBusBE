@@ -67,13 +67,14 @@ public class AnalyticsController {
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size) { // Mặc định top 10
 
         if (month == null) month = LocalDate.now().getMonthValue();
         if (year == null) year = LocalDate.now().getYear();
 
-        // Lưu ý: Sort được xử lý dynamic trong query JPQL dựa trên alias (totalRevenue)
-        Pageable pageable = PageRequest.of(page, size, Sort.by("totalRevenue").descending());
+        // FIX: Bỏ Sort.by("totalRevenue") đi để tránh lỗi SQL
+        // Chỉ tạo PageRequest với page và size.
+        Pageable pageable = PageRequest.of(page, size);
 
         return ResponseEntity.ok(analyticsService.getRouteAnalytics(month, year, pageable));
     }
