@@ -49,10 +49,28 @@ public class TripController {
                     direction = Sort.Direction.ASC
             ) Pageable pageable
     ) {
-        // Truyền thêm originId và destinationId vào Service
         Page<Trip> tripPage = tripService.getTripsByFilters(status, date, originId, destinationId, pageable);
 
-        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+        // Convert sang DTO
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(trip -> {
+            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
+            // Set Total
+            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+            }
+            // Gọi hàm đếm (Bạn cần thêm hàm countBookedSeats vào TripRepository như Bước 2)
+            // dto.setBookedSeats(tripRepository.countBookedSeats(trip.getTripId())); // Cần inject repo
+
+            // Tạm thời mock để test UI trước khi bạn backend làm xong query count
+            dto.setBookedSeats(5); // Mock
+            dto.setCheckedInSeats(2); // Mock
+
+            return dto;
+        });
+
+        // --- SỬA LẠI: GỌI SERVICE ĐỂ FILL DATA ---
+        // Để code Controller sạch, hãy nhờ bạn Backend implement hàm fillStats trong Service
+        // Nhưng tạm thời bạn có thể dùng cách dưới đây trong TripService:
 
         return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", responsePage));
     }
@@ -87,7 +105,7 @@ public class TripController {
             @RequestBody @Valid TripStatusUpdateDTO request
     ) {
         tripService.updateTripStatus(tripId, request.getStatus(), request.getNote());
-        return ResponseEntity.ok(ApiResponse.success("Trip status updated successfully", null));
+       return ResponseEntity.ok(ApiResponse.success("Trip status updated successfully", null));
     }
 
     @PostMapping

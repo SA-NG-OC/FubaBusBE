@@ -21,6 +21,10 @@ public class TripDetailedResponseDTO {
     private String subDriverName;
     private LocalDate date;         // VD: 2025-11-20
     private LocalTime departureTime; // VD: 06:00
+    private LocalTime arrivalTime;
     private BigDecimal price;       // VD: 250000
     private String status;          // VD: Waiting
+    private int totalSeats;      // Tổng ghế (Capacity)
+    private int bookedSeats;     // Đã đặt (Sold/Booked)
+    private int checkedInSeats;  // Đã lên xe (Checked-in)
 }

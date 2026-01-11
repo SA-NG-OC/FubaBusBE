@@ -36,16 +36,33 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
     List<Trip> findAllTripsByDate(@Param("startOfDay") LocalDateTime startOfDay,
                                   @Param("endOfDay") LocalDateTime endOfDay);
 
-    @Query("SELECT t FROM Trip t " +
-            "JOIN t.route r " +
-            "WHERE (:status IS NULL OR t.status = :status) " +
-            "AND t.departureTime >= COALESCE(:startDate, t.departureTime) " +
-            "AND t.departureTime <= COALESCE(:endDate, t.departureTime) " +
-            "AND (:originId IS NULL OR r.origin.locationId = :originId) " +
-            "AND (:destId IS NULL OR r.destination.locationId = :destId)")
+    @Query(value = "SELECT t FROM Trip t " +
+            "JOIN FETCH t.route r " +
+            "JOIN FETCH r.origin " +
+            "JOIN FETCH r.destination " +
+            "LEFT JOIN FETCH t.driver d " +
+            "LEFT JOIN FETCH d.user " +
+            "LEFT JOIN FETCH t.subDriver sd " +
+            "LEFT JOIN FETCH sd.user " +
+            "LEFT JOIN FETCH t.vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType " +
+            "WHERE (CAST(:status AS string) IS NULL OR t.status = :status) " + // <--- Ép kiểu String
+            "AND (CAST(:start AS timestamp) IS NULL OR t.departureTime >= :start) " + // <--- Ép kiểu Timestamp
+            "AND (CAST(:end AS timestamp) IS NULL OR t.departureTime <= :end) " +     // <--- Ép kiểu Timestamp
+            "AND (CAST(:originId AS integer) IS NULL OR r.origin.locationId = :originId) " + // <--- Ép kiểu Integer
+            "AND (CAST(:destId AS integer) IS NULL OR r.destination.locationId = :destId)",  // <--- Ép kiểu Integer
+
+            // Query đếm (Cũng phải ép kiểu y hệt)
+            countQuery = "SELECT COUNT(t) FROM Trip t " +
+                    "JOIN t.route r " +
+                    "WHERE (CAST(:status AS string) IS NULL OR t.status = :status) " +
+                    "AND (CAST(:start AS timestamp) IS NULL OR t.departureTime >= :start) " +
+                    "AND (CAST(:end AS timestamp) IS NULL OR t.departureTime <= :end) " +
+                    "AND (CAST(:originId AS integer) IS NULL OR r.origin.locationId = :originId) " +
+                    "AND (CAST(:destId AS integer) IS NULL OR r.destination.locationId = :destId)")
     Page<Trip> findTripsWithFilter(@Param("status") String status,
-                                   @Param("startDate") LocalDateTime startDate,
-                                   @Param("endDate") LocalDateTime endDate,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end,
                                    @Param("originId") Integer originId,
                                    @Param("destId") Integer destId,
                                    Pageable pageable);
@@ -193,4 +210,7 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
     BigDecimal sumTicketRevenue(@Param("start") LocalDateTime start,
                                 @Param("end") LocalDateTime end,
                                 @Param("routeId") Integer routeId);
+
+    @Query("SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip.tripId = :tripId AND ts.status IN ('Booked', 'Sold')")
+    int countBookedSeats(@Param("tripId") Integer tripId);
 }

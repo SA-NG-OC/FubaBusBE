@@ -3,6 +3,7 @@ package com.example.Fuba_BE.service.Trip;
 import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.domain.enums.SeatStatus;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
+import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.repository.*;
@@ -267,5 +268,16 @@ public class TripService implements ITripService {
 
         // 3. Gọi Repository (Tìm cả vai chính lẫn vai phụ)
         return tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
+    }
+
+    public TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId) {
+        // Đếm số vé đã đặt
+        int booked = tripRepository.countBookedSeats(tripId);
+        dto.setBookedSeats(booked);
+
+        // Mock Checked-in (Vì chưa có module check-in vé)
+        dto.setCheckedInSeats(0);
+
+        return dto;
     }
 }
