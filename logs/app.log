@@ -7997,3 +7997,11 @@ java.lang.NullPointerException: Cannot invoke "java.math.BigDecimal.doubleValue(
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:57)
 	at java.base/java.lang.Thread.run(Thread.java:1575)
 2026-01-11 16:02:56.189 [http-nio-5230-exec-9] WARN  o.s.w.s.m.m.a.ExceptionHandlerExceptionResolver - Resolved [java.lang.NullPointerException: Cannot invoke "java.math.BigDecimal.doubleValue()" because the return value of "com.example.Fuba_BE.dto.AdminReport.DashboardSummaryRes$MetricData.getValue()" is null]
+2026-01-11 16:05:25.330 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Starting FubaBeApplication using Java 23.0.2 with PID 10352 (D:\Dowload\Project\FubaBus\FubaBusBE\target\classes started by Ngoc Sang in D:\Dowload\Project\FubaBus\FubaBusBE)
+2026-01-11 16:05:25.334 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - No active profile set, falling back to 1 default profile: "default"
+2026-01-11 16:05:56.241 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Started FubaBeApplication in 32.145 seconds (process running for 33.345)
+2026-01-11 16:05:56.647 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Fuba_BE application started successfully.
+2026-01-11 16:05:59.661 [http-nio-5230-exec-3] WARN  o.s.d.w.c.SpringDataJackson3Configuration$PageModule$WarningLoggingModifier - Serializing PageImpl instances as-is is not supported, meaning that there is no guarantee about the stability of the resulting JSON structure!
+	For a stable JSON structure, please use Spring Data's PagedModel (globally via @EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO))
+	or Spring HATEOAS and Spring Data's PagedResourcesAssembler as documented in https://docs.spring.io/spring-data/commons/reference/repositories/core-extensions.html#core.web.pageables.
+
