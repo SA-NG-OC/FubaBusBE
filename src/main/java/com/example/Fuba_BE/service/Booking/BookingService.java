@@ -38,6 +38,7 @@ public class BookingService implements IBookingService {
     private final PassengerRepository passengerRepository;
     private final UserRepository userRepository;
     private final RouteStopRepository routeStopRepository;
+    private final RefundRepository refundRepository;
     private final BookingMapper bookingMapper;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -440,13 +441,19 @@ public class BookingService implements IBookingService {
             );
         }
 
+        String previousStatus = booking.getBookingStatus();
+        boolean needsRefund = "Paid".equals(previousStatus);
+
         booking.setBookingStatus("Cancelled");
         bookingRepository.save(booking);
 
         List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
+        List<Integer> ticketIds = new ArrayList<>();
+        
         for (Ticket ticket : tickets) {
             ticket.setTicketStatus("Cancelled");
             ticketRepository.save(ticket);
+            ticketIds.add(ticket.getTicketId());
 
             TripSeat seat = ticket.getSeat();
             if (seat != null) {
@@ -456,8 +463,62 @@ public class BookingService implements IBookingService {
             }
         }
 
-        log.info("Booking {} cancelled successfully by user. {} seats released.",
-                booking.getBookingCode(), tickets.size());
+        // Calculate refund based on cancellation policy
+        if (needsRefund && booking.getTotalAmount().compareTo(BigDecimal.ZERO) > 0) {
+            LocalDateTime departureTime = booking.getTrip().getDepartureTime();
+            LocalDateTime now = LocalDateTime.now();
+            long hoursUntilDeparture = java.time.Duration.between(now, departureTime).toHours();
+            
+            BigDecimal refundAmount;
+            int refundPercentage;
+            String refundType;
+            String refundReason;
+            
+            if (hoursUntilDeparture >= 48) {
+                // Cancel 2+ days before → 100% refund
+                refundPercentage = 100;
+                refundAmount = booking.getTotalAmount();
+                refundType = Refund.TYPE_FULL_CANCELLATION;
+                refundReason = "Khách hàng hủy vé trước 2 ngày - Hoàn 100%";
+            } else if (hoursUntilDeparture >= 12) {
+                // Cancel 12h - 2 days before → 50% refund
+                refundPercentage = 50;
+                refundAmount = booking.getTotalAmount()
+                        .multiply(BigDecimal.valueOf(50))
+                        .divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP);
+                refundType = Refund.TYPE_PARTIAL_CANCELLATION;
+                refundReason = "Khách hàng hủy vé trong vòng 12 tiếng - 2 ngày trước khởi hành - Hoàn 50%";
+            } else {
+                // Cancel less than 12h before → No refund
+                refundPercentage = 0;
+                refundAmount = BigDecimal.ZERO;
+                refundType = null; // No refund record needed
+                refundReason = "Khách hàng hủy vé trong vòng 12 tiếng trước khởi hành - Không hoàn tiền";
+            }
+            
+            // Only create refund record if there's money to refund
+            if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+                Refund refund = Refund.builder()
+                        .booking(booking)
+                        .refundAmount(refundAmount)
+                        .refundReason(refundReason)
+                        .refundType(refundType)
+                        .affectedTicketIds(ticketIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                        .refundStatus(Refund.STATUS_REFUNDED) // Mock: auto refunded
+                        .refundMethod(Refund.METHOD_TRANSFER) // Default: Transfer
+                        .build();
+                refundRepository.save(refund);
+                
+                log.info("Created refund for booking {}. Amount: {} ({}% of {})", 
+                        booking.getBookingCode(), refundAmount, refundPercentage, booking.getTotalAmount());
+            } else {
+                log.info("No refund for booking {} - cancelled less than 12 hours before departure", 
+                        booking.getBookingCode());
+            }
+        }
+
+        log.info("Booking {} cancelled successfully by user. {} seats released. Refund needed: {}",
+                booking.getBookingCode(), tickets.size(), needsRefund);
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 
