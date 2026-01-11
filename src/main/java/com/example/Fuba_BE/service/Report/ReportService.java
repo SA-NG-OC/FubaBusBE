@@ -3,6 +3,7 @@ package com.example.Fuba_BE.service.Report;
 import com.example.Fuba_BE.domain.enums.TripStatus;
 import com.example.Fuba_BE.dto.Report.TicketSalesReportDTO;
 import com.example.Fuba_BE.dto.Report.TripOperationReportDTO;
+import com.example.Fuba_BE.repository.RefundRepository;
 import com.example.Fuba_BE.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import java.time.LocalTime;
 public class ReportService implements IReportService {
 
     private final TripRepository tripRepository;
+    private final RefundRepository refundRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -52,7 +54,12 @@ public class ReportService implements IReportService {
 
         long totalSeats = tripRepository.countTotalSeats(start, end, routeId);
         long soldTickets = tripRepository.countSoldTickets(start, end, routeId);
-        BigDecimal revenue = tripRepository.sumTicketRevenue(start, end, routeId);
+        BigDecimal grossRevenue = tripRepository.sumTicketRevenue(start, end, routeId);
+        BigDecimal refundAmount = refundRepository.sumRefundAmountBetween(start, end);
+        
+        // Net revenue = Gross revenue - Refunds
+        BigDecimal netRevenue = (grossRevenue != null ? grossRevenue : BigDecimal.ZERO)
+                .subtract(refundAmount != null ? refundAmount : BigDecimal.ZERO);
 
         double occupancyRate = 0.0;
         if (totalSeats > 0) {
@@ -63,7 +70,7 @@ public class ReportService implements IReportService {
                 .totalSeats(totalSeats)
                 .ticketsSold(soldTickets)
                 .occupancyRate(Math.round(occupancyRate * 100.0) / 100.0)
-                .totalRevenue(revenue)
+                .totalRevenue(netRevenue)
                 .build();
     }
 }

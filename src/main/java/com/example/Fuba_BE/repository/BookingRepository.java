@@ -18,21 +18,51 @@ import java.util.Optional;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
-    // 1. Tính tổng doanh thu trong khoảng thời gian (Status: PAID, COMPLETED)
-    @Query("SELECT SUM(b.totalAmount) FROM Booking b " +
+    // 1. Tính tổng doanh thu GROSS trong khoảng thời gian (Status: PAID, COMPLETED)
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b " +
             "WHERE b.bookingStatus IN ('Paid', 'Completed') " +
             "AND b.createdAt BETWEEN :start AND :end")
+    BigDecimal sumGrossRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // 2. Tính tổng doanh thu NET (GROSS - Refund) trong khoảng thời gian
+    @Query(value = """
+        SELECT COALESCE(
+            (SELECT SUM(totalamount) FROM bookings 
+             WHERE bookingstatus IN ('Paid', 'Completed') 
+             AND createdat BETWEEN :start AND :end), 0)
+        - COALESCE(
+            (SELECT SUM(refundamount) FROM refunds 
+             WHERE refundstatus = 'Refunded' 
+             AND createdat BETWEEN :start AND :end), 0)
+        """, nativeQuery = true)
     BigDecimal sumRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // [THAY ĐỔI] Lấy doanh thu 12 tháng gần nhất (Rolling 12 months)
+    // [THAY ĐỔI] Lấy doanh thu NET 12 tháng gần nhất (Gross - Refunds)
     // Sắp xếp theo Năm-Tháng để biểu đồ hiển thị đúng thứ tự thời gian
     @Query(value = """
-        SELECT TO_CHAR(createdat, 'Mon-YY'), SUM(totalamount)
-        FROM bookings
-        WHERE bookingstatus IN ('Paid', 'Completed')
-        AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
-        GROUP BY TO_CHAR(createdat, 'Mon-YY'), DATE_TRUNC('month', createdat)
-        ORDER BY DATE_TRUNC('month', createdat) ASC
+        SELECT 
+            months.month_label,
+            COALESCE(booking_rev.gross_revenue, 0) - COALESCE(refund_amt.refund_total, 0) AS net_revenue
+        FROM (
+            SELECT TO_CHAR(DATE_TRUNC('month', CURRENT_DATE - (n || ' months')::INTERVAL), 'Mon-YY') AS month_label,
+                   DATE_TRUNC('month', CURRENT_DATE - (n || ' months')::INTERVAL) AS month_start
+            FROM generate_series(11, 0, -1) AS n
+        ) months
+        LEFT JOIN (
+            SELECT DATE_TRUNC('month', createdat) AS month_start, SUM(totalamount) AS gross_revenue
+            FROM bookings
+            WHERE bookingstatus IN ('Paid', 'Completed')
+            AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+            GROUP BY DATE_TRUNC('month', createdat)
+        ) booking_rev ON months.month_start = booking_rev.month_start
+        LEFT JOIN (
+            SELECT DATE_TRUNC('month', createdat) AS month_start, SUM(refundamount) AS refund_total
+            FROM refunds
+            WHERE refundstatus = 'Refunded'
+            AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+            GROUP BY DATE_TRUNC('month', createdat)
+        ) refund_amt ON months.month_start = refund_amt.month_start
+        ORDER BY months.month_start ASC
     """, nativeQuery = true)
     List<Object[]> getRevenueLast12Months();
 
