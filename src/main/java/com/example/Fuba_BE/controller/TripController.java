@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,8 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import com.example.Fuba_BE.domain.entity.Trip;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripStatusUpdateRequestDTO;
-import com.example.Fuba_BE.mapper.TripMapper; // Import Mapper
+import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Trip.ITripService;
 
@@ -30,31 +30,48 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TripController {
 
-    private final ITripService tripService; // Dùng final theo guideline
-    private final TripMapper tripMapper;    // Inject Mapper vào Controller
+    private final ITripService tripService;
+    private final TripMapper tripMapper;
 
     @GetMapping
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getTrips(
             @RequestParam(required = false) String status,
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer originId,
             @RequestParam(required = false) Integer destinationId,
-            // ---------------------------
-
-            @PageableDefault(
-                    page = 0,
-                    size = 20,
-                    sort = { "departureTime" },
-                    direction = Sort.Direction.ASC
-            ) Pageable pageable
+            @PageableDefault(page = 0, size = 20, sort = { "departureTime" }, direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        // Truyền thêm originId và destinationId vào Service
         Page<Trip> tripPage = tripService.getTripsByFilters(status, date, originId, destinationId, pageable);
 
-        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(trip -> {
+            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
+            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+            } else {
+                dto.setTotalSeats(40);
+            }
+            return tripService.enrichTripStats(dto, trip.getTripId());
+        });
 
         return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", responsePage));
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<TripDetailedResponseDTO>> createTrip(
+            @Valid @RequestBody TripCreateRequestDTO request
+    ) {
+        Trip newTrip = tripService.createTrip(request);
+        TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(newTrip);
+
+        // Enrich stats cho chuyến mới (0 booked)
+        responseDTO = tripService.enrichTripStats(responseDTO, newTrip.getTripId());
+        if (newTrip.getVehicle() != null && newTrip.getVehicle().getVehicleType() != null) {
+            responseDTO.setTotalSeats(newTrip.getVehicle().getVehicleType().getTotalSeats());
+        }
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Trip created successfully", responseDTO));
     }
 
     @GetMapping("/calendar-dates")
@@ -70,14 +87,10 @@ public class TripController {
     public ResponseEntity<ApiResponse<List<TripDetailedResponseDTO>>> getTripsByDate(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        // 1. Lấy List<Trip>
         List<Trip> trips = tripService.getTripsDetailsByDate(date);
-
-        // 2. Map sang List<DTO>
         List<TripDetailedResponseDTO> responseDTOs = trips.stream()
                 .map(tripMapper::toDetailedDTO)
                 .collect(Collectors.toList());
-
         return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", responseDTOs));
     }
 
@@ -90,21 +103,6 @@ public class TripController {
         return ResponseEntity.ok(ApiResponse.success("Trip status updated successfully", null));
     }
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<TripDetailedResponseDTO>> createTrip(
-            @Valid @RequestBody TripCreateRequestDTO request
-    ) {
-        // 1. Service tạo và trả về Entity
-        Trip newTrip = tripService.createTrip(request);
-
-        // 2. Controller dùng Mapper chuyển Entity -> DTO trả về
-        TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(newTrip);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Trip created successfully", responseDTO));
-    }
-
     @DeleteMapping("/{tripId}")
     public ResponseEntity<ApiResponse<Void>> deleteTrip(@PathVariable Integer tripId) {
         tripService.deleteTrip(tripId);
@@ -114,15 +112,19 @@ public class TripController {
     @GetMapping("/driver/{driverId}")
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getDriverTrips(
             @PathVariable Integer driverId,
-            @RequestParam(required = false) String status, // Lọc theo: Waiting, Running, Completed...
+            @RequestParam(required = false) String status,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable
     ) {
-        // Gọi Service
         Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, pageable);
-
-        // Convert sang DTO
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
-
         return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
+    }
+
+    @GetMapping("/{tripId}/passengers")
+    public ResponseEntity<ApiResponse<List<PassengerOnTripResponseDTO>>> getPassengersOnTrip(
+            @PathVariable Integer tripId
+    ) {
+        List<PassengerOnTripResponseDTO> passengers = tripService.getPassengersOnTrip(tripId);
+        return ResponseEntity.ok(ApiResponse.success("Passengers on trip retrieved successfully", passengers));
     }
 }

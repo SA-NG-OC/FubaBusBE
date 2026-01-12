@@ -5,7 +5,7 @@ public enum TripStatus {
     RUNNING("Running"),
     DELAYED("Delayed"),
     COMPLETED("Completed"),
-    CANCELLED("Cancelled");
+    Cancelled("Cancelled");
 
     private final String displayName;
 

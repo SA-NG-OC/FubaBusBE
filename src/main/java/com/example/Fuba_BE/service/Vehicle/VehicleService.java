@@ -29,8 +29,7 @@ public class VehicleService implements IVehicleService {
 
     @Override
     public List<VehicleSelectionDTO> getAllVehiclesForSelection() {
-        // Chỉ lấy xe có trạng thái "Hoàn thiện" hoặc "Hoạt động" tùy data của bạn
-        List<Vehicle> vehicles = vehicleRepository.findByStatus("Hoàn thiện");
+        List<Vehicle> vehicles = vehicleRepository.findAllWithVehicleType();
 
         return vehicles.stream()
                 .map(selectionMapper::toVehicleSelectionDTO)
