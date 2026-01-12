@@ -4,6 +4,7 @@ import com.example.Fuba_BE.domain.entity.Booking;
 import com.example.Fuba_BE.domain.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,21 +18,51 @@ import java.util.Optional;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
-    // 1. Tính tổng doanh thu trong khoảng thời gian (Status: PAID, COMPLETED)
-    @Query("SELECT SUM(b.totalAmount) FROM Booking b " +
+    // 1. Tính tổng doanh thu GROSS trong khoảng thời gian (Status: PAID, COMPLETED)
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0) FROM Booking b " +
             "WHERE b.bookingStatus IN ('Paid', 'Completed') " +
             "AND b.createdAt BETWEEN :start AND :end")
+    BigDecimal sumGrossRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // 2. Tính tổng doanh thu NET (GROSS - Refund) trong khoảng thời gian
+    @Query(value = """
+        SELECT COALESCE(
+            (SELECT SUM(totalamount) FROM bookings 
+             WHERE bookingstatus IN ('Paid', 'Completed') 
+             AND createdat BETWEEN :start AND :end), 0)
+        - COALESCE(
+            (SELECT SUM(refundamount) FROM refunds 
+             WHERE refundstatus = 'Refunded' 
+             AND createdat BETWEEN :start AND :end), 0)
+        """, nativeQuery = true)
     BigDecimal sumRevenueBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // [THAY ĐỔI] Lấy doanh thu 12 tháng gần nhất (Rolling 12 months)
+    // [THAY ĐỔI] Lấy doanh thu NET 12 tháng gần nhất (Gross - Refunds)
     // Sắp xếp theo Năm-Tháng để biểu đồ hiển thị đúng thứ tự thời gian
     @Query(value = """
-        SELECT TO_CHAR(createdat, 'Mon-YY'), SUM(totalamount)
-        FROM bookings
-        WHERE bookingstatus IN ('Paid', 'Completed')
-        AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
-        GROUP BY TO_CHAR(createdat, 'Mon-YY'), DATE_TRUNC('month', createdat)
-        ORDER BY DATE_TRUNC('month', createdat) ASC
+        SELECT 
+            months.month_label,
+            COALESCE(booking_rev.gross_revenue, 0) - COALESCE(refund_amt.refund_total, 0) AS net_revenue
+        FROM (
+            SELECT TO_CHAR(DATE_TRUNC('month', CURRENT_DATE - (n || ' months')::INTERVAL), 'Mon-YY') AS month_label,
+                   DATE_TRUNC('month', CURRENT_DATE - (n || ' months')::INTERVAL) AS month_start
+            FROM generate_series(11, 0, -1) AS n
+        ) months
+        LEFT JOIN (
+            SELECT DATE_TRUNC('month', createdat) AS month_start, SUM(totalamount) AS gross_revenue
+            FROM bookings
+            WHERE bookingstatus IN ('Paid', 'Completed')
+            AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+            GROUP BY DATE_TRUNC('month', createdat)
+        ) booking_rev ON months.month_start = booking_rev.month_start
+        LEFT JOIN (
+            SELECT DATE_TRUNC('month', createdat) AS month_start, SUM(refundamount) AS refund_total
+            FROM refunds
+            WHERE refundstatus = 'Refunded'
+            AND createdat >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '11 months')
+            GROUP BY DATE_TRUNC('month', createdat)
+        ) refund_amt ON months.month_start = refund_amt.month_start
+        ORDER BY months.month_start ASC
     """, nativeQuery = true)
     List<Object[]> getRevenueLast12Months();
 
@@ -39,6 +70,13 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      * Find booking by booking code
      */
     Optional<Booking> findByBookingCode(String bookingCode);
+
+    /**
+     * Find booking by booking code with pessimistic lock (for IPN concurrency safety)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.bookingCode = :bookingCode")
+    Optional<Booking> findByBookingCodeWithLock(@Param("bookingCode") String bookingCode);
 
     /**
      * Find booking by ID with pessimistic lock
@@ -57,6 +95,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      */
     @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId ORDER BY b.createdAt DESC")
     List<Booking> findByCustomerId(@Param("customerId") Integer customerId);
+
+    /**
+     * Find all bookings for a customer by customer ID and status
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId AND b.bookingStatus = :status ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerIdAndBookingStatus(@Param("customerId") Integer customerId, @Param("status") String status);
 
     /**
      * Find all bookings for a trip
@@ -80,6 +124,32 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      */
     @Query("SELECT b FROM Booking b WHERE b.customerPhone = :phone ORDER BY b.createdAt DESC")
     List<Booking> findByCustomerPhone(@Param("phone") String phone);
+
+    /**
+     * Find expired bookings based on holdExpiry timestamp.
+     * CRITICAL: Use holdExpiry (not createdAt or updatedAt) to determine expiration.
+     * 
+     * Logic:
+     * - Booking created at 10:00 with holdExpiry = 10:15
+     * - User creates payment at 10:12 → holdExpiry extended to 10:27
+     * - At 10:27, if still HELD/PENDING → expire it
+     * 
+     * @param now Current timestamp
+     * @return List of bookings that have exceeded their hold time
+     */
+    @Query("SELECT b FROM Booking b WHERE b.bookingStatus IN ('Held', 'Pending') AND b.holdExpiry < :now")
+    List<Booking> findExpiredBookings(@Param("now") LocalDateTime now);
+
+    /**
+     * Bulk update expired bookings to EXPIRED status.
+     * Uses holdExpiry for accurate timeout tracking.
+     * 
+     * @param now Current timestamp
+     * @return Number of bookings updated
+     */
+    @Modifying
+    @Query("UPDATE Booking b SET b.bookingStatus = 'Expired', b.updatedAt = :now WHERE b.bookingStatus IN ('Held', 'Pending') AND b.holdExpiry < :now")
+    int updateExpiredBookingsStatus(@Param("now") LocalDateTime now);
 
     /**
      * Count bookings for a trip

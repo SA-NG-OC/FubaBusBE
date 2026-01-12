@@ -2,9 +2,13 @@ package com.example.Fuba_BE.service.Trip;
 
 import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.domain.enums.SeatStatus;
+import com.example.Fuba_BE.domain.enums.TripStatus;
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
+import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
+import com.example.Fuba_BE.mapper.PassengerOnTripMapper;
 import com.example.Fuba_BE.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -12,14 +16,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import com.example.Fuba_BE.domain.enums.TripStatus;
-import com.example.Fuba_BE.domain.enums.SeatStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,241 +35,164 @@ public class TripService implements ITripService {
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final TripSeatRepository tripSeatRepository;
-
-    // --- CÁC HÀM GET DỮ LIỆU ---
+    private final TicketRepository ticketRepository;
+    private final PassengerRepository passengerRepository;
+    private final PassengerOnTripMapper passengerOnTripMapper;
 
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId, Pageable pageable) {
-        // Xử lý status rỗng
         String filterStatus = StringUtils.hasText(status) ? status : null;
-
-        // Xử lý ngày giờ (Tìm trong khoảng từ 00:00 đến 23:59 của ngày đó)
-        LocalDateTime start = null;
-        LocalDateTime end = null;
-        if (date != null) {
-            start = date.atStartOfDay();
-            end = date.atTime(LocalTime.MAX);
-        }
-
-        // Gọi Repository với các tham số mới
+        LocalDateTime start = null; LocalDateTime end = null;
+        if (date != null) { start = date.atStartOfDay(); end = date.atTime(LocalTime.MAX); }
         return tripRepository.findTripsWithFilter(filterStatus, start, end, originId, destId, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LocalDate> getDaysWithTrips(LocalDate startDate, LocalDate endDate) {
-        if (startDate.isAfter(endDate)) {
-            throw new BadRequestException("Start date cannot be after end date");
-        }
+        if (startDate.isAfter(endDate)) throw new BadRequestException("Start date cannot be after end date");
         return tripRepository.findDistinctTripDates(startDate.atStartOfDay(), endDate.atTime(LocalTime.MAX));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Trip> getTripsDetailsByDate(LocalDate date) {
-        return tripRepository.findAllTripsByDate(
-                date.atStartOfDay(), date.atTime(LocalTime.MAX)
-        );
+        return tripRepository.findAllTripsByDate(date.atStartOfDay(), date.atTime(LocalTime.MAX));
     }
 
     @Override
     @Transactional
     public void updateTripStatus(Integer tripId, String status, String note) {
-        // 1. Tìm chuyến xe (để check tồn tại và lấy entity)
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-
-        // 2. Validate trạng thái hợp lệ (Chỉ chấp nhận các status trong Enum)
-        try {
-            // Kiểm tra xem status gửi lên có đúng chính tả trong Enum không
-            // (Lưu ý: FE gửi lên chuỗi hiển thị 'Running', ta cần map ngược lại hoặc dùng chuẩn UPPERCASE tùy convention của bạn)
-            // Ở đây mình giả định FE gửi đúng chuỗi khớp với DB (Ví dụ: "Running", "Delayed")
-            boolean isValid = false;
-            for (TripStatus ts : TripStatus.values()) {
-                if (ts.getDisplayName().equals(status)) {
-                    isValid = true;
-                    break;
-                }
-            }
-            if (!isValid) throw new IllegalArgumentException();
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException("Invalid status: " + status);
-        }
-
-        // 3. Cập nhật
+        Trip trip = tripRepository.findById(tripId).orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
         trip.setStatus(status);
-
-        // Nếu có ghi chú (ví dụ lý do hoãn), cập nhật luôn
-        if (note != null) {
-            trip.setStatusNote(note);
-        }
-
-        // 4. Lưu lại
+        if (note != null) trip.setStatusNote(note);
         tripRepository.save(trip);
     }
 
-    // --- HÀM TẠO CHUYẾN XE (Create Trip) ---
     @Override
     @Transactional
     public Trip createTrip(TripCreateRequestDTO request) {
-        // 1. Fetch Entities cơ bản
-        Route route = routeRepository.findById(request.getRouteId())
-                .orElseThrow(() -> new ResourceNotFoundException("Route not found: " + request.getRouteId()));
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + request.getVehicleId()));
-        Driver driver = driverRepository.findById(request.getDriverId())
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + request.getDriverId()));
+        // Validate Time
+        LocalDateTime departureTime = LocalDateTime.of(request.getDate(), request.getDepartureTime());
+        if (departureTime.isBefore(LocalDateTime.now())) throw new BadRequestException("Thời gian khởi hành không được ở trong quá khứ!");
 
-        // 2. Xử lý Phụ xe (Sub Driver) - Có thể null
+        // Fetch
+        Route route = routeRepository.findById(request.getRouteId()).orElseThrow(() -> new ResourceNotFoundException("Route not found"));
+        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId()).orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
+        Driver driver = driverRepository.findById(request.getDriverId()).orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
+
+        // Check Role Main Driver
+        if (driver.getUser() == null || driver.getUser().getRole() == null ||
+                !"DRIVER".equalsIgnoreCase(driver.getUser().getRole().getRoleName())) {
+            throw new BadRequestException("Người lái chính không phải là Tài xế (Role DRIVER)");
+        }
+
+        // Sub Driver
         Driver subDriver = null;
         if (request.getSubDriverId() != null) {
-            subDriver = driverRepository.findById(request.getSubDriverId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found: " + request.getSubDriverId()));
-
-            // Validate: Tài xế chính và Phụ xe không được là một người
-            if (driver.getDriverId().equals(subDriver.getDriverId())) {
-                throw new BadRequestException("Tài xế chính và Phụ xe không được trùng nhau!");
+            subDriver = driverRepository.findById(request.getSubDriverId()).orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
+            if (driver.getDriverId().equals(subDriver.getDriverId())) throw new BadRequestException("Trùng tài xế!");
+            if (subDriver.getUser() == null || subDriver.getUser().getRole() == null ||
+                    !"DRIVER".equalsIgnoreCase(subDriver.getUser().getRole().getRoleName())) {
+                throw new BadRequestException("Phụ xe không phải là Tài xế (Role DRIVER)");
             }
         }
 
-        // 3. Logic Thời gian
-        LocalDateTime departureTime = LocalDateTime.of(request.getDate(), request.getDepartureTime());
-        int durationMinutes = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 300;
-        LocalDateTime arrivalTime = departureTime.plusMinutes(durationMinutes);
+        // Duration
+        Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 5.0;
+        LocalDateTime arrivalTime = departureTime.plusMinutes((long)(durationHours * 60));
 
-        if (arrivalTime.isBefore(departureTime)) {
-            throw new BadRequestException("Arrival time cannot be before departure time");
-        }
+        // Conflict Check
+        if (tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime, arrivalTime)) throw new BadRequestException("Xe bận!");
+        if (tripRepository.isPersonBusy(request.getDriverId(), departureTime, arrivalTime)) throw new BadRequestException("Tài xế bận!");
+        if (subDriver != null && tripRepository.isPersonBusy(subDriver.getDriverId(), departureTime, arrivalTime)) throw new BadRequestException("Phụ xe bận!");
 
-        // --- 4. KIỂM TRA XUNG ĐỘT (CONFLICT CHECK) ---
-
-        // A. Check trùng Xe
-        if (tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime, arrivalTime)) {
-            throw new BadRequestException("Chiếc xe này đang bận chạy chuyến khác trong khung giờ này!");
-        }
-
-        // B. Check trùng Tài xế chính
-        if (tripRepository.isPersonBusy(request.getDriverId(), departureTime, arrivalTime)) {
-            throw new BadRequestException("Tài xế chính đang bận (lái hoặc phụ) chuyến khác trong khung giờ này!");
-        }
-
-        // C. Check trùng Phụ xe (nếu có chọn phụ xe)
-        if (subDriver != null) {
-            if (tripRepository.isPersonBusy(subDriver.getDriverId(), departureTime, arrivalTime)) {
-                throw new BadRequestException("Phụ xe đang bận (lái hoặc phụ) chuyến khác trong khung giờ này!");
-            }
-        }
-        // ---------------------------------------------
-
-        // 5. Construct Trip Entity
+        // Save
         Trip trip = new Trip();
         trip.setRoute(route);
         trip.setVehicle(vehicle);
         trip.setDriver(driver);
-        trip.setSubDriver(subDriver); // Set phụ xe
+        trip.setSubDriver(subDriver);
         trip.setDepartureTime(departureTime);
         trip.setArrivalTime(arrivalTime);
-        trip.setBasePrice(request.getPrice());
-
-        // Status tiếng Anh chuẩn
-        trip.setStatus(com.example.Fuba_BE.domain.enums.TripStatus.WAITING.getDisplayName());
-
+        // trip.setDate(request.getDate()); <-- ĐÃ XÓA DÒNG GÂY LỖI NÀY
+        trip.setBasePrice(request.getPrice()); // <-- Đã sửa lấy từ Request, không lấy từ Route nữa
+        trip.setStatus(TripStatus.WAITING.getDisplayName());
         trip.setOnlineBookingCutoff(60);
         trip.setIsFullyBooked(false);
         trip.setMinPassengers(1);
         trip.setAutoCancelIfNotEnough(false);
 
         Trip savedTrip = tripRepository.save(trip);
-
-        // 6. Generate Seats
         generateSeatsForTrip(savedTrip, vehicle);
-
         return savedTrip;
     }
 
-    // --- LOGIC SINH GHẾ (ENGLISH VERSION) ---
     private void generateSeatsForTrip(Trip trip, Vehicle vehicle) {
-        if (vehicle.getVehicleType() == null) {
-            return;
-        }
-
+        if (vehicle.getVehicleType() == null) return;
         int totalSeats = vehicle.getVehicleType().getTotalSeats();
-        int floors = vehicle.getVehicleType().getNumberOfFloors() != null ? vehicle.getVehicleType().getNumberOfFloors() : 1;
-
         List<TripSeat> seatsToSave = new ArrayList<>();
-
-        if (floors <= 1) {
-            // 1 Floor: A01...A{N}
-            seatsToSave.addAll(createFloorSeats(trip, 1, "A", totalSeats));
-        } else if (floors == 2) {
-            // 2 Floors: Floor 1 (A), Floor 2 (B)
-            int perFloor = totalSeats / 2;
-            seatsToSave.addAll(createFloorSeats(trip, 1, "A", perFloor));
-            seatsToSave.addAll(createFloorSeats(trip, 2, "B", totalSeats - perFloor));
-        }
-
-        tripSeatRepository.saveAll(seatsToSave);
-    }
-
-    private List<TripSeat> createFloorSeats(Trip trip, int floorNumber, String prefix, int count) {
-        List<TripSeat> list = new ArrayList<>();
-
-        // 1. Status: Lấy từ Enum đã sửa ("Available")
-        final String STATUS_TO_SAVE = SeatStatus.Available.getDisplayName();
-
-        final String TYPE_NORMAL = "Standard";
-
-        for (int i = 1; i <= count; i++) {
-            TripSeat seat = TripSeat.builder()
+        for (int i = 1; i <= totalSeats; i++) {
+            seatsToSave.add(TripSeat.builder()
                     .trip(trip)
-                    .floorNumber(floorNumber)
-                    .seatNumber(prefix + String.format("%02d", i))
-                    .seatType(TYPE_NORMAL)
-                    .status(STATUS_TO_SAVE)
-                    .build();
-            list.add(seat);
+                    .seatNumber("A" + String.format("%02d", i))
+                    .seatType("Standard")
+                    .status(SeatStatus.Available.getDisplayName())
+                    .build());
         }
-        return list;
+        tripSeatRepository.saveAll(seatsToSave);
     }
 
     @Override
     @Transactional
     public void deleteTrip(Integer tripId) {
-        // 1. Kiểm tra chuyến xe có tồn tại không
-        Trip trip = tripRepository.findById(tripId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
-
-        // 2. Kiểm tra xem có vé nào đã bán (Booked) chưa?
-        // Nếu có ghế "Booked" -> Chặn không cho xóa
-        boolean hasBookings = tripSeatRepository.existsByTrip_TripIdAndStatus(
-                tripId,
-                SeatStatus.Booked.getDisplayName() // "Booked"
-        );
-
-        if (hasBookings) {
-            throw new BadRequestException("Không thể xóa chuyến xe đã có vé bán ra. Hãy dùng chức năng Hủy chuyến (Cancel).");
+        Trip trip = tripRepository.findById(tripId).orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
+        if (tripSeatRepository.existsByTrip_TripIdAndStatus(tripId, SeatStatus.Booked.getDisplayName())) {
+            throw new BadRequestException("Không thể xóa chuyến đã có vé bán.");
         }
-
-        // 3. Nếu an toàn (chưa ai mua), xóa sạch ghế trước
         tripSeatRepository.deleteByTrip_TripId(tripId);
-
-        // 4. Cuối cùng xóa chuyến xe
         tripRepository.delete(trip);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable) {
-        // 1. Kiểm tra tài xế có tồn tại không
-        if (!driverRepository.existsById(driverId)) {
-            throw new ResourceNotFoundException("Driver not found with id: " + driverId);
+        if (!driverRepository.existsById(driverId)) throw new ResourceNotFoundException("Driver not found");
+        return tripRepository.findTripsByDriverOrSubDriver(driverId, StringUtils.hasText(status) ? status : null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId) {
+        if (!tripRepository.existsById(tripId)) throw new ResourceNotFoundException("Trip not found");
+        List<TripSeat> allSeats = tripSeatRepository.findAllSeatsByTripIdWithDetails(tripId);
+        List<Ticket> activeTickets = ticketRepository.findActiveTicketsByTripIdWithDetails(tripId);
+        List<Passenger> passengers = passengerRepository.findAllByTripIdWithDetails(tripId);
+
+        Map<Integer, Ticket> seatToTicketMap = activeTickets.stream().collect(Collectors.toMap(t -> t.getSeat().getSeatId(), t -> t, (e, r) -> e));
+        Map<Integer, Passenger> ticketToPassengerMap = passengers.stream().collect(Collectors.toMap(p -> p.getTicket().getTicketId(), p -> p, (e, r) -> e));
+
+        List<PassengerOnTripResponseDTO> result = new ArrayList<>();
+        for (TripSeat seat : allSeats) {
+            Ticket ticket = seatToTicketMap.get(seat.getSeatId());
+            if (ticket != null) {
+                Passenger passenger = ticketToPassengerMap.get(ticket.getTicketId());
+                result.add(passengerOnTripMapper.toDTO(seat, ticket, passenger));
+            } else {
+                result.add(passengerOnTripMapper.toSeatOnlyDTO(seat));
+            }
         }
+        return result;
+    }
 
-        // 2. Xử lý status rỗng
-        String filterStatus = StringUtils.hasText(status) ? status : null;
-
-        // 3. Gọi Repository (Tìm cả vai chính lẫn vai phụ)
-        return tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
+    // --- HÀM NÀY GIÚP HIỂN THỊ SỐ LIỆU ---
+    @Override
+    public TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId) {
+        int booked = tripRepository.countBookedSeats(tripId);
+        dto.setBookedSeats(booked);
+        int checkedIn = tripRepository.countCheckedInSeats(tripId);
+        dto.setCheckedInSeats(checkedIn);
+        return dto;
     }
 }

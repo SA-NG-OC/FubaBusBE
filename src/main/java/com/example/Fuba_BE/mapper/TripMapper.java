@@ -15,6 +15,7 @@ public interface TripMapper {
     @Mapping(source = "subDriver.user.fullName", target = "subDriverName")
     @Mapping(target = "date", expression = "java(trip.getDepartureTime().toLocalDate())")
     @Mapping(target = "departureTime", expression = "java(trip.getDepartureTime().toLocalTime())")
+    @Mapping(target = "arrivalTime", expression = "java(trip.getArrivalTime().toLocalTime())")
     @Mapping(source = "basePrice", target = "price")
     @Mapping(source = "status", target = "status")
     TripDetailedResponseDTO toDetailedDTO(Trip trip);

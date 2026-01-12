@@ -19,10 +19,7 @@ public class DriverService implements IDriverService {
     @Override
     public List<DriverSelectionDTO> getAllDriversForSelection() {
         // Lấy tất cả tài xế
-        List<Driver> drivers = driverRepository.findAll();
-
-        return drivers.stream()
-                .map(selectionMapper::toDriverSelectionDTO)
-                .toList();
+        List<Driver> drivers = driverRepository.findAllWithUserAndRoleDriver();
+        return drivers.stream().map(selectionMapper::toDriverSelectionDTO).toList();
     }
 }

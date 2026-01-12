@@ -24,11 +24,12 @@ public class TripCreateRequestDTO {
     private Integer subDriverId;
 
     @NotNull(message = "Date is required")
-    @FutureOrPresent(message = "Date must be today or in the future")
     private LocalDate date;
 
     @NotNull(message = "Departure time is required")
     private LocalTime departureTime;
+
+    // --- ĐÃ XÓA arrivalTime ---
 
     @NotNull(message = "Price is required")
     @Min(value = 0, message = "Price must be greater than or equal to 0")
