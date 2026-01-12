@@ -7,6 +7,8 @@ import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
 import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
+import com.example.Fuba_BE.dto.Booking.RescheduleRequest;
+import com.example.Fuba_BE.dto.Booking.RescheduleResponse;
 
 /**
  * Service interface for booking operations.
@@ -110,4 +112,18 @@ public interface IBookingService {
      * @return BookingResponse with updated status
      */
     BookingResponse cancelBooking(Integer bookingId, String userId);
+
+    /**
+     * Reschedule a booking to a new trip.
+     * Cancels old booking, creates new booking, and handles refund/extra fee.
+     * 
+     * Policy:
+     * - If new trip is cheaper: refund the difference
+     * - If new trip is more expensive: customer pays extra fee
+     * - Reschedule must be done at least 12 hours before old trip departure
+     *
+     * @param request RescheduleRequest with old booking and new trip details
+     * @return RescheduleResponse with old/new booking info and financial summary
+     */
+    RescheduleResponse rescheduleBooking(RescheduleRequest request);
 }

@@ -162,6 +162,31 @@ public class BookingController {
                 .build());
     }
 
+    @PostMapping("/reschedule")
+    @Operation(summary = "Reschedule booking to a new trip",
+            description = "Cancel old booking and create new booking on a different trip. " +
+                    "Handles refund if new trip is cheaper, or extra fee if more expensive. " +
+                    "Must be done at least 12 hours before old trip departure.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Reschedule successful"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request or policy violation"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Booking or trip not found")
+    })
+    public ResponseEntity<ApiResponse<RescheduleResponse>> rescheduleBooking(
+            @Valid @RequestBody RescheduleRequest request) {
+
+        log.info("Reschedule request: bookingId={}, newTripId={}", 
+                request.getOldBookingId(), request.getNewTripId());
+
+        RescheduleResponse response = bookingService.rescheduleBooking(request);
+
+        return ResponseEntity.ok(ApiResponse.<RescheduleResponse>builder()
+                .success(true)
+                .message(response.getMessage())
+                .data(response)
+                .build());
+    }
+
     @PostMapping("/{bookingId}/payment")
     public ResponseEntity<ApiResponse<BookingResponse>> processPayment(
             @PathVariable Integer bookingId,
