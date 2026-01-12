@@ -1,9 +1,0 @@
-2026-01-07 23:08:07.448 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Starting FubaBeApplication using Java 21.0.9 with PID 21052 (D:\D-User\UIT\app\5\OOAD\FubaBusBE\target\classes started by Duy in d:\D-User\UIT\app\5\OOAD\FubaBusBE)
-2026-01-07 23:08:07.450 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - No active profile set, falling back to 1 default profile: "default"
-2026-01-07 23:08:16.319 [restartedMain] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-01-07 23:08:20.719 [restartedMain] WARN  o.s.b.j.a.JpaBaseConfiguration$JpaWebConfiguration - spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-01-07 23:08:21.555 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Started FubaBeApplication in 14.495 seconds (process running for 14.869)
-2026-01-07 23:08:21.610 [restartedMain] INFO  c.example.Fuba_BE.FubaBeApplication - Fuba_BE application started successfully.
-2026-01-07 23:36:18.108 [main] INFO  c.e.Fuba_BE.FubaBeApplicationTests - Starting FubaBeApplicationTests using Java 25.0.1 with PID 21008 (started by Duy in D:\D-User\UIT\app\5\OOAD\FubaBusBE)
-2026-01-07 23:36:18.109 [main] INFO  c.e.Fuba_BE.FubaBeApplicationTests - No active profile set, falling back to 1 default profile: "default"
-2026-01-07 23:36:30.619 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
