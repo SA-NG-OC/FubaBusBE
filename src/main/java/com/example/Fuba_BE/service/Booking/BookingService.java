@@ -5,6 +5,8 @@ import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
 import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
+import com.example.Fuba_BE.dto.Booking.RescheduleRequest;
+import com.example.Fuba_BE.dto.Booking.RescheduleResponse;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.BookingMapper;
@@ -520,6 +522,240 @@ public class BookingService implements IBookingService {
         log.info("Booking {} cancelled successfully by user. {} seats released. Refund needed: {}",
                 booking.getBookingCode(), tickets.size(), needsRefund);
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+    }
+
+    @Override
+    @Transactional
+    public RescheduleResponse rescheduleBooking(RescheduleRequest request) {
+        log.info("Rescheduling booking {} to trip {} by user {}", 
+                request.getOldBookingId(), request.getNewTripId(), request.getUserId());
+
+        // 1. Validate old booking
+        Booking oldBooking = bookingRepository.findByIdWithLock(request.getOldBookingId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + request.getOldBookingId()));
+
+        // Check ownership
+        if (oldBooking.getCustomer() != null) {
+            try {
+                Integer requesterId = Integer.parseInt(request.getUserId());
+                if (!oldBooking.getCustomer().getUserId().equals(requesterId)) {
+                    throw new BadRequestException("Bạn không có quyền đổi vé booking này");
+                }
+            } catch (NumberFormatException e) {
+                throw new BadRequestException("Bạn không có quyền đổi vé booking này");
+            }
+        }
+
+        // Check status - only Paid bookings can be rescheduled
+        if (!"Paid".equals(oldBooking.getBookingStatus())) {
+            throw new BadRequestException("Chỉ có thể đổi vé đã thanh toán. Trạng thái hiện tại: " + oldBooking.getBookingStatus());
+        }
+
+        // Check reschedule time - must be at least 12 hours before departure
+        LocalDateTime oldDepartureTime = oldBooking.getTrip().getDepartureTime();
+        LocalDateTime now = LocalDateTime.now();
+        long hoursUntilDeparture = java.time.Duration.between(now, oldDepartureTime).toHours();
+        
+        if (hoursUntilDeparture < 12) {
+            throw new BadRequestException("Không thể đổi vé trong vòng 12 tiếng trước giờ khởi hành");
+        }
+
+        // 2. Validate new trip
+        Trip newTrip = tripRepository.findById(request.getNewTripId())
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy chuyến đi mới với ID: " + request.getNewTripId()));
+
+        // Check new trip is not the same as old trip
+        if (newTrip.getTripId().equals(oldBooking.getTrip().getTripId())) {
+            throw new BadRequestException("Chuyến đi mới phải khác chuyến đi cũ");
+        }
+
+        // Check new trip departure is in the future
+        if (newTrip.getDepartureTime().isBefore(now)) {
+            throw new BadRequestException("Chuyến đi mới đã khởi hành");
+        }
+
+        // Check new trip status
+        if ("Cancelled".equals(newTrip.getStatus()) || "COMPLETED".equals(newTrip.getStatus())) {
+            throw new BadRequestException("Chuyến đi mới không khả dụng. Trạng thái: " + newTrip.getStatus());
+        }
+
+        // 3. Validate new seats
+        List<TripSeat> newSeats = new ArrayList<>();
+        for (Integer seatId : request.getNewSeatIds()) {
+            TripSeat seat = tripSeatRepository.findBySeatIdAndTripId(seatId, request.getNewTripId())
+                    .orElseThrow(() -> new NotFoundException("Không tìm thấy ghế " + seatId + " trong chuyến đi mới"));
+            
+            // Seat must be locked by this user or available
+            if (seat.isBooked()) {
+                throw new BadRequestException("Ghế " + seat.getSeatNumber() + " đã được đặt");
+            }
+            if (seat.isLocked() && !request.getUserId().equals(seat.getLockedBy())) {
+                throw new BadRequestException("Ghế " + seat.getSeatNumber() + " đang được giữ bởi người khác");
+            }
+            newSeats.add(seat);
+        }
+
+        // 4. Calculate financial details
+        BigDecimal oldAmount = oldBooking.getTotalAmount();
+        BigDecimal newAmount = newTrip.getBasePrice().multiply(BigDecimal.valueOf(newSeats.size()));
+        BigDecimal priceDifference = newAmount.subtract(oldAmount);
+
+        BigDecimal refundAmount = BigDecimal.ZERO;
+        BigDecimal extraFee = BigDecimal.ZERO;
+        String financialDescription;
+
+        if (priceDifference.compareTo(BigDecimal.ZERO) < 0) {
+            // New trip is cheaper -> refund the difference
+            refundAmount = priceDifference.abs();
+            financialDescription = String.format("Hoàn tiền %s VNĐ do chuyến mới rẻ hơn", refundAmount);
+        } else if (priceDifference.compareTo(BigDecimal.ZERO) > 0) {
+            // New trip is more expensive -> customer pays extra
+            extraFee = priceDifference;
+            financialDescription = String.format("Phụ thu %s VNĐ do chuyến mới đắt hơn", extraFee);
+        } else {
+            financialDescription = "Không phát sinh chi phí thêm";
+        }
+
+        // 5. Cancel old booking (release seats)
+        List<Ticket> oldTickets = ticketRepository.findByBookingId(oldBooking.getBookingId());
+        List<Integer> oldTicketIds = new ArrayList<>();
+        
+        for (Ticket ticket : oldTickets) {
+            ticket.setTicketStatus("Rescheduled");
+            ticketRepository.save(ticket);
+            oldTicketIds.add(ticket.getTicketId());
+
+            TripSeat oldSeat = ticket.getSeat();
+            if (oldSeat != null) {
+                oldSeat.release();
+                tripSeatRepository.save(oldSeat);
+                broadcastSeatUpdate(oldBooking.getTrip().getTripId(), oldSeat);
+            }
+        }
+
+        oldBooking.setBookingStatus("Rescheduled");
+        bookingRepository.save(oldBooking);
+
+        // 6. Create new booking
+        String newBookingCode = generateBookingCode();
+        
+        Booking newBooking = Booking.builder()
+                .bookingCode(newBookingCode)
+                .customer(oldBooking.getCustomer())
+                .customerName(oldBooking.getCustomerName())
+                .customerPhone(oldBooking.getCustomerPhone())
+                .customerEmail(oldBooking.getCustomerEmail())
+                .trip(newTrip)
+                .totalAmount(newAmount)
+                .bookingStatus("Paid") // Auto-paid for reschedule
+                .bookingType(oldBooking.getBookingType())
+                .isGuestBooking(oldBooking.getIsGuestBooking())
+                .guestSessionId(oldBooking.getGuestSessionId())
+                .holdExpiry(null) // No hold for rescheduled booking
+                .build();
+        
+        newBooking = bookingRepository.save(newBooking);
+
+        // 7. Create new tickets
+        List<Ticket> newTickets = new ArrayList<>();
+        int passengerIndex = 0;
+        
+        for (TripSeat newSeat : newSeats) {
+            String ticketCode = generateTicketCode();
+            
+            Ticket newTicket = Ticket.builder()
+                    .ticketCode(ticketCode)
+                    .booking(newBooking)
+                    .seat(newSeat)
+                    .price(newTrip.getBasePrice())
+                    .ticketStatus("Booked")
+                    .build();
+            newTicket = ticketRepository.save(newTicket);
+            newTickets.add(newTicket);
+
+            // Update seat status
+            newSeat.setStatus("Booked");
+            newSeat.setLockedBy(null);
+            newSeat.setHoldExpiry(null);
+            tripSeatRepository.save(newSeat);
+            broadcastSeatUpdate(newTrip.getTripId(), newSeat);
+
+            // Create passenger info
+            if (request.getPassengers() != null && passengerIndex < request.getPassengers().size()) {
+                createPassenger(newTicket, request.getPassengers().get(passengerIndex));
+            } else if (passengerIndex < oldTickets.size()) {
+                // Copy passenger from old ticket
+                Optional<Passenger> oldPassenger = passengerRepository.findByTicket_TicketId(
+                        oldTickets.get(passengerIndex).getTicketId());
+                if (oldPassenger.isPresent()) {
+                    Passenger op = oldPassenger.get();
+                    Passenger newPassenger = Passenger.builder()
+                            .ticket(newTicket)
+                            .fullName(op.getFullName())
+                            .phoneNumber(op.getPhoneNumber())
+                            .pickupLocation(op.getPickupLocation())
+                            .pickupAddress(op.getPickupAddress())
+                            .dropoffLocation(op.getDropoffLocation())
+                            .dropoffAddress(op.getDropoffAddress())
+                            .specialNote(op.getSpecialNote())
+                            .build();
+                    passengerRepository.save(newPassenger);
+                }
+            }
+            passengerIndex++;
+        }
+
+        // 8. Create refund record if applicable
+        Integer refundId = null;
+        if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+            Refund refund = Refund.builder()
+                    .booking(oldBooking)
+                    .refundAmount(refundAmount)
+                    .refundReason(request.getReason() != null ? request.getReason() : "Đổi vé sang chuyến rẻ hơn")
+                    .refundType(Refund.TYPE_RESCHEDULE)
+                    .affectedTicketIds(oldTicketIds.stream().map(String::valueOf).collect(Collectors.joining(",")))
+                    .newTrip(newTrip)
+                    .priceDifference(priceDifference)
+                    .refundStatus(Refund.STATUS_REFUNDED) // Mock: auto refunded
+                    .refundMethod(Refund.METHOD_TRANSFER)
+                    .build();
+            refund = refundRepository.save(refund);
+            refundId = refund.getRefundId();
+            
+            log.info("Created refund {} for reschedule. Amount: {}", refundId, refundAmount);
+        }
+
+        // 9. Build response
+        BookingResponse oldBookingResponse = bookingMapper.toBookingResponse(oldBooking, oldBooking.getTrip(), oldTickets);
+        BookingResponse newBookingResponse = bookingMapper.toBookingResponse(newBooking, newTrip, newTickets);
+
+        RescheduleResponse.FinancialSummary financialSummary = RescheduleResponse.FinancialSummary.builder()
+                .oldBookingAmount(oldAmount)
+                .newBookingAmount(newAmount)
+                .priceDifference(priceDifference)
+                .refundAmount(refundAmount)
+                .extraFee(extraFee)
+                .rescheduleFee(BigDecimal.ZERO) // No reschedule fee for now
+                .netAmount(priceDifference)
+                .description(financialDescription)
+                .build();
+
+        String message = refundAmount.compareTo(BigDecimal.ZERO) > 0 
+                ? String.format("Đổi vé thành công! Hoàn tiền: %s VNĐ", refundAmount)
+                : extraFee.compareTo(BigDecimal.ZERO) > 0 
+                        ? String.format("Đổi vé thành công! Phụ thu: %s VNĐ", extraFee)
+                        : "Đổi vé thành công!";
+
+        log.info("Reschedule completed: {} -> {}. Price diff: {}", 
+                oldBooking.getBookingCode(), newBooking.getBookingCode(), priceDifference);
+
+        return RescheduleResponse.builder()
+                .oldBooking(oldBookingResponse)
+                .newBooking(newBookingResponse)
+                .financialSummary(financialSummary)
+                .refundId(refundId)
+                .message(message)
+                .build();
     }
 
     // ==================== Private Helper Methods ====================

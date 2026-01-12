@@ -38,6 +38,21 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
     Optional<Ticket> findByTicketCode(String ticketCode);
 
     /**
+     * Find ticket by code with pessimistic lock for check-in
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {
+            "booking",
+            "booking.trip",
+            "booking.trip.route",
+            "booking.trip.route.origin",
+            "booking.trip.route.destination",
+            "seat"
+    })
+    @Query("SELECT t FROM Ticket t WHERE t.ticketCode = :ticketCode")
+    Optional<Ticket> findByTicketCodeWithLock(@Param("ticketCode") String ticketCode);
+
+    /**
      * Find ticket by ID with pessimistic lock
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
