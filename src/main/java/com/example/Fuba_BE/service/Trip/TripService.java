@@ -6,6 +6,7 @@ import com.example.Fuba_BE.domain.enums.TripStatus;
 import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
 import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
+import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.PassengerOnTripMapper;
@@ -147,11 +148,25 @@ public class TripService implements ITripService {
     @Override
     @Transactional
     public void deleteTrip(Integer tripId) {
-        Trip trip = tripRepository.findById(tripId).orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
-        if (tripSeatRepository.existsByTrip_TripIdAndStatus(tripId, SeatStatus.Booked.getDisplayName())) {
-            throw new BadRequestException("Không thể xóa chuyến đã có vé bán.");
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
+
+        // 1. Validate Status: Không xóa chuyến đang chạy hoặc đã xong
+        if ("Running".equalsIgnoreCase(trip.getStatus()) || "Completed".equalsIgnoreCase(trip.getStatus())) {
+            throw new BadRequestException("Cannot delete a trip that is Running or Completed.");
         }
-        tripSeatRepository.deleteByTrip_TripId(tripId);
+
+        // 2. Validate Booking: Kiểm tra xem có vé nào đã bán chưa
+        long activeTickets = ticketRepository.countActiveTicketsByTripId(tripId);
+
+        if (activeTickets > 0) {
+            // Nếu đã có vé, không cho xóa cứng. Yêu cầu Admin phải hủy chuyến (Cancel)
+            throw new BadRequestException(
+                    String.format("Cannot DELETE this trip because there are %d active tickets sold. Please CANCEL the trip instead to notify passengers.", activeTickets)
+            );
+        }
+
+        // 3. Nếu chưa ai mua vé -> Xóa cứng
         tripRepository.delete(trip);
     }
 
@@ -194,5 +209,53 @@ public class TripService implements ITripService {
         int checkedIn = tripRepository.countCheckedInSeats(tripId);
         dto.setCheckedInSeats(checkedIn);
         return dto;
+    }
+
+    @Override
+    @Transactional
+    public Trip updateTrip(Integer tripId, TripUpdateRequestDTO request) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
+
+        // 1. Validate Status: Chỉ cho sửa khi Waiting hoặc Delayed
+        if (!"Waiting".equalsIgnoreCase(trip.getStatus()) && !"Delayed".equalsIgnoreCase(trip.getStatus())) {
+            throw new BadRequestException("Only trips with status 'Waiting' or 'Delayed' can be edited.");
+        }
+
+        // 2. Lấy thông tin Xe và Tài xế mới từ DB
+        Vehicle newVehicle = vehicleRepository.findById(request.getVehicleId())
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
+        Driver newDriver = driverRepository.findById(request.getDriverId())
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
+
+        // 3. Validate Vehicle Capacity (Quan trọng!)
+        // Nếu admin đổi xe, phải đảm bảo xe mới đủ chỗ cho số khách đã đặt
+        long ticketsSold = ticketRepository.countActiveTicketsByTripId(tripId);
+        int newCapacity = newVehicle.getVehicleType().getTotalSeats(); // Giả sử VehicleType chứa số ghế
+
+        if (newCapacity < ticketsSold) {
+            throw new BadRequestException(
+                    String.format("Cannot change to vehicle %s. New capacity (%d) is less than tickets sold (%d).",
+                            newVehicle.getLicensePlate(), newCapacity, ticketsSold)
+            );
+        }
+
+        // 4. Validate Driver: Tài xế chính và phụ không được trùng nhau
+        Driver subDriver = null;
+        if (request.getSubDriverId() != null) {
+            if (request.getDriverId().equals(request.getSubDriverId())) {
+                throw new BadRequestException("Main driver and sub-driver cannot be the same person.");
+            }
+            subDriver = driverRepository.findById(request.getSubDriverId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
+        }
+
+        // 5. Update thông tin
+        trip.setVehicle(newVehicle);
+        trip.setDriver(newDriver);
+        trip.setSubDriver(subDriver);
+        trip.setBasePrice(request.getPrice()); // Update giá vé (Lưu ý: Vé cũ đã mua sẽ không đổi giá, vé mới sẽ theo giá này)
+
+        return tripRepository.save(trip);
     }
 }
