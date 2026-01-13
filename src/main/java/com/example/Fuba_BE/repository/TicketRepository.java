@@ -140,4 +140,11 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
             "AND t.status != 'Cancelled'")
     Long countSoldTicketsBetween(@Param("start") LocalDateTime start,
                                  @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(t) FROM Ticket t " +
+            "JOIN t.booking b " +
+            "WHERE b.trip.tripId = :tripId " +
+            "AND t.ticketStatus NOT IN ('Cancelled') " +
+            "AND b.bookingStatus NOT IN ('Cancelled', 'Expired')")
+    long countActiveTicketsByTripId(@Param("tripId") Integer tripId);
 }

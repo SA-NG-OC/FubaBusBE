@@ -4,8 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
+import com.example.Fuba_BE.dto.Trip.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -16,8 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.example.Fuba_BE.domain.entity.Trip;
-import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
-import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Trip.ITripService;
@@ -126,5 +123,24 @@ public class TripController {
     ) {
         List<PassengerOnTripResponseDTO> passengers = tripService.getPassengersOnTrip(tripId);
         return ResponseEntity.ok(ApiResponse.success("Passengers on trip retrieved successfully", passengers));
+    }
+
+    @PutMapping("/{tripId}")
+    public ResponseEntity<ApiResponse<TripDetailedResponseDTO>> updateTrip(
+            @PathVariable Integer tripId,
+            @Valid @RequestBody TripUpdateRequestDTO request
+    ) {
+        Trip updatedTrip = tripService.updateTrip(tripId, request);
+        TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(updatedTrip);
+
+        // Enrich stats lại để trả về data đầy đủ
+        responseDTO = tripService.enrichTripStats(responseDTO, tripId);
+
+        // Set total seats thủ công nếu mapper chưa làm
+        if (updatedTrip.getVehicle() != null && updatedTrip.getVehicle().getVehicleType() != null) {
+            responseDTO.setTotalSeats(updatedTrip.getVehicle().getVehicleType().getTotalSeats());
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("Trip updated successfully", responseDTO));
     }
 }
