@@ -2,6 +2,8 @@ package com.example.Fuba_BE.repository;
 
 import com.example.Fuba_BE.domain.entity.Booking;
 import com.example.Fuba_BE.domain.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -166,4 +168,26 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         WHERE bookingcode LIKE CONCAT('BK', :datePrefix, '%')
     """, nativeQuery = true)
     Integer getLatestBookingSequence(@Param("datePrefix") String datePrefix);
+
+    /**
+     * Find all bookings with pagination and optional filtering
+     */
+    @Query("""
+        SELECT DISTINCT b FROM Booking b 
+        LEFT JOIN FETCH b.customer 
+        LEFT JOIN FETCH b.trip t
+        LEFT JOIN FETCH t.route
+        LEFT JOIN FETCH t.vehicle
+        LEFT JOIN FETCH t.driver
+        WHERE (:status IS NULL OR b.bookingStatus = :status)
+        AND (:search IS NULL OR :search = '' OR 
+             LOWER(b.bookingCode) LIKE LOWER(CONCAT('%', :search, '%')) OR
+             LOWER(b.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+             LOWER(b.customerPhone) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    Page<Booking> findAllWithFilters(
+        @Param("status") String status,
+        @Param("search") String search,
+        Pageable pageable
+    );
 }

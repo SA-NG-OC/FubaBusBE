@@ -2,6 +2,8 @@ package com.example.Fuba_BE.service.Booking;
 
 import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
+import com.example.Fuba_BE.dto.Booking.BookingFilterRequest;
+import com.example.Fuba_BE.dto.Booking.BookingPageResponse;
 import com.example.Fuba_BE.dto.Booking.BookingPreviewResponse;
 import com.example.Fuba_BE.dto.Booking.BookingResponse;
 import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
@@ -13,6 +15,10 @@ import com.example.Fuba_BE.mapper.BookingMapper;
 import com.example.Fuba_BE.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -882,5 +888,100 @@ public class BookingService implements IBookingService {
         } catch (Exception e) {
             log.error("Failed to broadcast seat update: {}", e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingPageResponse getAllBookings(BookingFilterRequest filterRequest) {
+        log.info("Getting all bookings with filters: {}", filterRequest);
+
+        // Build sort
+        Sort sort = Sort.by(
+            "DESC".equalsIgnoreCase(filterRequest.getSortDirection()) 
+                ? Sort.Direction.DESC 
+                : Sort.Direction.ASC,
+            filterRequest.getSortBy()
+        );
+
+        // Build pageable
+        Pageable pageable = PageRequest.of(
+            filterRequest.getPage(),
+            filterRequest.getSize(),
+            sort
+        );
+
+        // Query with filters
+        Page<Booking> bookingPage = bookingRepository.findAllWithFilters(
+            filterRequest.getStatus(),
+            filterRequest.getSearch(),
+            pageable
+        );
+
+        // Map to response
+        List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
+                .map(bookingMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return BookingPageResponse.builder()
+                .bookings(bookingResponses)
+                .currentPage(bookingPage.getNumber())
+                .pageSize(bookingPage.getSize())
+                .totalElements(bookingPage.getTotalElements())
+                .totalPages(bookingPage.getTotalPages())
+                .isFirst(bookingPage.isFirst())
+                .isLast(bookingPage.isLast())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse confirmBookingById(Integer bookingId) {
+        log.info("Confirming booking with ID: {}", bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
+
+        // Validate current status
+        if (!"Pending".equals(booking.getBookingStatus()) && !"Held".equals(booking.getBookingStatus())) {
+            throw new BadRequestException(
+                "Chỉ có thể xác nhận booking ở trạng thái Pending hoặc Held. Trạng thái hiện tại: " 
+                + booking.getBookingStatus()
+            );
+        }
+
+        // Update status
+        booking.setBookingStatus("Paid");
+        booking.setUpdatedAt(LocalDateTime.now());
+        bookingRepository.save(booking);
+
+        // Update all tickets
+        List<Ticket> tickets = ticketRepository.findByBooking(booking);
+        for (Ticket ticket : tickets) {
+            ticket.setTicketStatus("Confirmed");
+            ticket.setUpdatedAt(LocalDateTime.now());
+        }
+        ticketRepository.saveAll(tickets);
+
+        // Update seats to Booked status
+        for (Ticket ticket : tickets) {
+            TripSeat tripSeat = tripSeatRepository.findBySeatIdAndTripId(
+                ticket.getSeat().getSeatId(),
+                booking.getTrip().getTripId()
+            ).orElse(null);
+
+            if (tripSeat != null) {
+                tripSeat.setStatus("Booked");
+                tripSeat.setLockedBy(null);
+                tripSeat.setHoldExpiry(null);
+                tripSeat.setUpdatedAt(LocalDateTime.now());
+                tripSeatRepository.save(tripSeat);
+                
+                // Broadcast update
+                broadcastSeatUpdate(booking.getTrip().getTripId(), tripSeat);
+            }
+        }
+
+        log.info("Booking {} confirmed successfully", bookingId);
+        return bookingMapper.toResponse(booking);
     }
 }
