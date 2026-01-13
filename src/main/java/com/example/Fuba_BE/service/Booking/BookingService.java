@@ -919,7 +919,10 @@ public class BookingService implements IBookingService {
 
         // Map to response
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
-                .map(bookingMapper::toResponse)
+                .map(booking -> {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                })
                 .collect(Collectors.toList());
 
         return BookingPageResponse.builder()
@@ -951,14 +954,12 @@ public class BookingService implements IBookingService {
 
         // Update status
         booking.setBookingStatus("Paid");
-        booking.setUpdatedAt(LocalDateTime.now());
         bookingRepository.save(booking);
 
         // Update all tickets
-        List<Ticket> tickets = ticketRepository.findByBooking(booking);
+        List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
         for (Ticket ticket : tickets) {
             ticket.setTicketStatus("Confirmed");
-            ticket.setUpdatedAt(LocalDateTime.now());
         }
         ticketRepository.saveAll(tickets);
 
@@ -973,7 +974,6 @@ public class BookingService implements IBookingService {
                 tripSeat.setStatus("Booked");
                 tripSeat.setLockedBy(null);
                 tripSeat.setHoldExpiry(null);
-                tripSeat.setUpdatedAt(LocalDateTime.now());
                 tripSeatRepository.save(tripSeat);
                 
                 // Broadcast update
@@ -982,6 +982,6 @@ public class BookingService implements IBookingService {
         }
 
         log.info("Booking {} confirmed successfully", bookingId);
-        return bookingMapper.toResponse(booking);
+        return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 }
