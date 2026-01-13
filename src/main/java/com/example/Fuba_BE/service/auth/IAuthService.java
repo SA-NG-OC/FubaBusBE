@@ -38,6 +38,13 @@ public interface IAuthService {
     ApiResponse<String> resetPassword(ResetPasswordRequest request);
     
     /**
+     * Validate reset password token
+     * @param token the reset token to validate
+     * @return validation result message
+     */
+    ApiResponse<String> validateResetToken(String token);
+    
+    /**
      * Refresh access token using refresh token
      * @param refreshToken the refresh token
      * @return new access token and refresh token
