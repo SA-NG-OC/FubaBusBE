@@ -128,4 +128,20 @@ public interface IBookingService {
      * @return RescheduleResponse with old/new booking info and financial summary
      */
     RescheduleResponse rescheduleBooking(RescheduleRequest request);
+
+    /**
+     * Get all bookings with pagination and filtering.
+     *
+     * @param filterRequest BookingFilterRequest with page, size, status, search, sortBy, sortDirection
+     * @return BookingPageResponse with paginated bookings
+     */
+    BookingPageResponse getAllBookings(BookingFilterRequest filterRequest);
+
+    /**
+     * Confirm a pending booking (change status from Pending to Confirmed/Paid).
+     *
+     * @param bookingId The booking ID to confirm
+     * @return BookingResponse with updated status
+     */
+    BookingResponse confirmBookingById(Integer bookingId);
 }
