@@ -27,6 +27,39 @@ public class BookingController {
 
     private final IBookingService bookingService;
 
+    /* ================= LIST ALL WITH FILTERS ================= */
+
+    @GetMapping
+    @Operation(summary = "Get all bookings with pagination and filtering", 
+               description = "Retrieve all bookings with optional status filter and search by booking code, customer name, or phone")
+    public ResponseEntity<ApiResponse<BookingPageResponse>> getAllBookings(
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "createdAt") String sortBy,
+            @RequestParam(required = false, defaultValue = "DESC") String sortDirection) {
+
+        log.info("Get all bookings: page={}, size={}, status={}, search={}", page, size, status, search);
+
+        BookingFilterRequest filterRequest = BookingFilterRequest.builder()
+                .page(page)
+                .size(size)
+                .status(status)
+                .search(search)
+                .sortBy(sortBy)
+                .sortDirection(sortDirection)
+                .build();
+
+        BookingPageResponse response = bookingService.getAllBookings(filterRequest);
+
+        return ResponseEntity.ok(ApiResponse.<BookingPageResponse>builder()
+                .success(true)
+                .message("Lấy danh sách booking thành công")
+                .data(response)
+                .build());
+    }
+
     /* ================= PREVIEW ================= */
 
     @GetMapping("/preview")
@@ -159,6 +192,23 @@ public class BookingController {
                 .success(true)
                 .message("Hủy booking thành công")
                 .data(bookingService.cancelBooking(bookingId, userId))
+                .build());
+    }
+
+    @PostMapping("/{bookingId}/confirm")
+    @Operation(summary = "Confirm a booking", 
+               description = "Change booking status from Pending/Held to Paid and update related tickets and seats")
+    public ResponseEntity<ApiResponse<BookingResponse>> confirmBooking(
+            @PathVariable Integer bookingId) {
+
+        log.info("Confirm booking with ID: {}", bookingId);
+
+        BookingResponse response = bookingService.confirmBookingById(bookingId);
+
+        return ResponseEntity.ok(ApiResponse.<BookingResponse>builder()
+                .success(true)
+                .message("Xác nhận booking thành công")
+                .data(response)
                 .build());
     }
 
