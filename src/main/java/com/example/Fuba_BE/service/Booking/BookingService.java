@@ -9,6 +9,7 @@ import com.example.Fuba_BE.dto.Booking.BookingResponse;
 import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
 import com.example.Fuba_BE.dto.Booking.RescheduleRequest;
 import com.example.Fuba_BE.dto.Booking.RescheduleResponse;
+import com.example.Fuba_BE.dto.Booking.TicketCountResponse;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.BookingMapper;
@@ -983,5 +984,86 @@ public class BookingService implements IBookingService {
 
         log.info("Booking {} confirmed successfully", bookingId);
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingPageResponse getMyTickets(Integer userId, String status, Integer page, Integer size) {
+        log.info("Get my tickets for user {}: status={}, page={}, size={}", userId, status, page, size);
+
+        // Validate user exists
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        // Build pageable with sort by departure time descending
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "trip.departureTime"));
+
+        Page<Booking> bookingPage;
+        
+        if (status == null || status.trim().isEmpty()) {
+            // Get all bookings
+            bookingPage = bookingRepository.findByCustomer(user, pageable);
+        } else if ("Upcoming".equalsIgnoreCase(status)) {
+            // Upcoming = Held + Paid (not completed, not cancelled, departure time in future)
+            LocalDateTime now = LocalDateTime.now();
+            bookingPage = bookingRepository.findByCustomerAndBookingStatusInAndTripDepartureTimeAfter(
+                    user, Arrays.asList("Held", "Paid"), now, pageable);
+        } else if ("Completed".equalsIgnoreCase(status)) {
+            bookingPage = bookingRepository.findByCustomerAndBookingStatus(user, "Completed", pageable);
+        } else if ("Cancelled".equalsIgnoreCase(status)) {
+            bookingPage = bookingRepository.findByCustomerAndBookingStatus(user, "Cancelled", pageable);
+        } else {
+            // Exact status match
+            bookingPage = bookingRepository.findByCustomerAndBookingStatus(user, status, pageable);
+        }
+
+        List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
+                .map(booking -> {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                })
+                .collect(Collectors.toList());
+
+        return BookingPageResponse.builder()
+                .bookings(bookingResponses)
+                .currentPage(bookingPage.getNumber())
+                .pageSize(bookingPage.getSize())
+                .totalElements(bookingPage.getTotalElements())
+                .totalPages(bookingPage.getTotalPages())
+                .isFirst(bookingPage.isFirst())
+                .isLast(bookingPage.isLast())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TicketCountResponse getMyTicketsCount(Integer userId) {
+        log.info("Get my tickets count for user {}", userId);
+
+        // Validate user exists
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // Count upcoming (Held + Paid with future departure)
+        Long upcomingCount = bookingRepository.countByCustomerAndBookingStatusInAndTripDepartureTimeAfter(
+                user, Arrays.asList("Held", "Paid"), now);
+
+        // Count completed
+        Long completedCount = bookingRepository.countByCustomerAndBookingStatus(user, "Completed");
+
+        // Count cancelled
+        Long cancelledCount = bookingRepository.countByCustomerAndBookingStatus(user, "Cancelled");
+
+        // Total
+        Long totalCount = bookingRepository.countByCustomer(user);
+
+        return TicketCountResponse.builder()
+                .upcomingCount(upcomingCount)
+                .completedCount(completedCount)
+                .cancelledCount(cancelledCount)
+                .totalCount(totalCount)
+                .build();
     }
 }
