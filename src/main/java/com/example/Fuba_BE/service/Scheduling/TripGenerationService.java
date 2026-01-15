@@ -308,7 +308,6 @@ public class TripGenerationService implements ITripGenerationService {
                                   originalRoute.getOrigin().getLocationName());
         reverseRoute.setDistance(originalRoute.getDistance());
         reverseRoute.setEstimatedDuration(originalRoute.getEstimatedDuration());
-        reverseRoute.setIsActive(true);
         reverseRoute.setStatus("Active");
 
         return routeRepository.save(reverseRoute);
