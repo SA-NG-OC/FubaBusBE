@@ -74,6 +74,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     Optional<Booking> findByBookingCode(String bookingCode);
 
     /**
+     * Find booking by ticket code
+     */
+    @Query("SELECT t.booking FROM Ticket t WHERE t.ticketCode = :ticketCode")
+    Optional<Booking> findByTicketCode(@Param("ticketCode") String ticketCode);
+
+    /**
      * Find booking by booking code with pessimistic lock (for IPN concurrency safety)
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

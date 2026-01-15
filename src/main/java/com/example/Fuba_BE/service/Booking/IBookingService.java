@@ -75,6 +75,14 @@ public interface IBookingService {
     BookingResponse getBookingByCode(String bookingCode);
 
     /**
+     * Get booking by ticket code
+     *
+     * @param ticketCode The ticket code
+     * @return BookingResponse with booking details
+     */
+    BookingResponse getBookingByTicketCode(String ticketCode);
+
+    /**
      * Get all bookings for a customer
      *
      * @param customerId The customer ID
