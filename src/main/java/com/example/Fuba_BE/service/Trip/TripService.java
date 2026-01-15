@@ -3,17 +3,20 @@ package com.example.Fuba_BE.service.Trip;
 import com.example.Fuba_BE.domain.entity.*;
 import com.example.Fuba_BE.domain.enums.SeatStatus;
 import com.example.Fuba_BE.domain.enums.TripStatus;
-import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
-import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
+import com.example.Fuba_BE.dto.Trip.*;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.PassengerOnTripMapper;
+import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.repository.*;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -39,6 +42,79 @@ public class TripService implements ITripService {
     private final TicketRepository ticketRepository;
     private final PassengerRepository passengerRepository;
     private final PassengerOnTripMapper passengerOnTripMapper;
+    private final TripMapper tripMapper; // [NEW] Inject thêm mapper
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
+                                                     String search, Integer originId, Integer destId,
+                                                     Double minPrice, Double maxPrice, LocalDate date,
+                                                     List<String> timeRanges, List<String> vehicleTypes) {
+
+        Sort sort = sortDir.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<Trip> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            // Search Keyword
+            if (search != null && !search.isEmpty()) {
+                predicates.add(cb.like(cb.lower(root.get("routeName")), "%" + search.toLowerCase() + "%"));
+            }
+            if (originId != null) {
+                predicates.add(cb.equal(root.get("route").get("origin").get("id"), originId));
+            }
+            if (destId != null) {
+                predicates.add(cb.equal(root.get("route").get("destination").get("id"), destId));
+            }
+            if (minPrice != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("price"), minPrice));
+            }
+            if (maxPrice != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("price"), maxPrice));
+            }
+            if (date != null) {
+                LocalDateTime startOfDay = date.atStartOfDay();
+                LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+                predicates.add(cb.between(root.get("departureTime"), startOfDay, endOfDay));
+            }
+
+            // --- Time Ranges ---
+            if (timeRanges != null && !timeRanges.isEmpty()) {
+                List<Predicate> timePredicates = new ArrayList<>();
+                Expression<Integer> hourExp = cb.function("hour", Integer.class, root.get("departureTime"));
+
+                for (String range : timeRanges) {
+                    switch (range.toLowerCase()) {
+                        case "morning":
+                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 6), cb.lessThan(hourExp, 12))); break;
+                        case "afternoon":
+                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 12), cb.lessThan(hourExp, 18))); break;
+                        case "evening":
+                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 18), cb.lessThan(hourExp, 24))); break;
+                        case "night":
+                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 0), cb.lessThan(hourExp, 6))); break;
+                    }
+                }
+                if (!timePredicates.isEmpty()) {
+                    predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
+                }
+            }
+
+            // --- Bus Types ---
+            if (vehicleTypes != null && !vehicleTypes.isEmpty()) {
+                predicates.add(root.get("vehicle").get("vehicleType").get("typeName").in(vehicleTypes));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Trip> tripPage = tripRepository.findAll(spec, pageable);
+        // Map sang TripDetailedResponseDTO để khớp với code cũ
+        return tripPage.map(tripMapper::toDetailedDTO);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -117,8 +193,7 @@ public class TripService implements ITripService {
         trip.setSubDriver(subDriver);
         trip.setDepartureTime(departureTime);
         trip.setArrivalTime(arrivalTime);
-        // trip.setDate(request.getDate()); <-- ĐÃ XÓA DÒNG GÂY LỖI NÀY
-        trip.setBasePrice(request.getPrice()); // <-- Đã sửa lấy từ Request, không lấy từ Route nữa
+        trip.setBasePrice(request.getPrice());
         trip.setStatus(TripStatus.WAITING.getDisplayName());
         trip.setOnlineBookingCutoff(60);
         trip.setIsFullyBooked(false);
@@ -151,22 +226,18 @@ public class TripService implements ITripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
-        // 1. Validate Status: Không xóa chuyến đang chạy hoặc đã xong
         if ("Running".equalsIgnoreCase(trip.getStatus()) || "Completed".equalsIgnoreCase(trip.getStatus())) {
             throw new BadRequestException("Cannot delete a trip that is Running or Completed.");
         }
 
-        // 2. Validate Booking: Kiểm tra xem có vé nào đã bán chưa
         long activeTickets = ticketRepository.countActiveTicketsByTripId(tripId);
 
         if (activeTickets > 0) {
-            // Nếu đã có vé, không cho xóa cứng. Yêu cầu Admin phải hủy chuyến (Cancel)
             throw new BadRequestException(
                     String.format("Cannot DELETE this trip because there are %d active tickets sold. Please CANCEL the trip instead to notify passengers.", activeTickets)
             );
         }
 
-        // 3. Nếu chưa ai mua vé -> Xóa cứng
         tripRepository.delete(trip);
     }
 
@@ -201,7 +272,6 @@ public class TripService implements ITripService {
         return result;
     }
 
-    // --- HÀM NÀY GIÚP HIỂN THỊ SỐ LIỆU ---
     @Override
     public TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId) {
         int booked = tripRepository.countBookedSeats(tripId);
@@ -217,30 +287,25 @@ public class TripService implements ITripService {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
-        // 1. Validate Status: Chỉ cho sửa khi Waiting hoặc Delayed
         if (!"Waiting".equalsIgnoreCase(trip.getStatus()) && !"Delayed".equalsIgnoreCase(trip.getStatus())) {
             throw new BadRequestException("Only trips with status 'Waiting' or 'Delayed' can be edited.");
         }
 
-        // 2. Lấy thông tin Xe và Tài xế mới từ DB
         Vehicle newVehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
         Driver newDriver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
-        // 3. Validate Vehicle Capacity (Quan trọng!)
-        // Nếu admin đổi xe, phải đảm bảo xe mới đủ chỗ cho số khách đã đặt
         long ticketsSold = ticketRepository.countActiveTicketsByTripId(tripId);
-        int newCapacity = newVehicle.getVehicleType().getTotalSeats(); // Giả sử VehicleType chứa số ghế
+        int newCapacity = newVehicle.getVehicleType().getTotalSeats();
 
         if (newCapacity < ticketsSold) {
             throw new BadRequestException(
-                    String.format("Cannot change to vehicle %s. New capacity (%d) is less than tickets sold (%d).",
-                            newVehicle.getLicensePlate(), newCapacity, ticketsSold)
+                    String.format("Cannot change vehicle. New capacity (%d) is less than tickets sold (%d).",
+                            newCapacity, ticketsSold)
             );
         }
 
-        // 4. Validate Driver: Tài xế chính và phụ không được trùng nhau
         Driver subDriver = null;
         if (request.getSubDriverId() != null) {
             if (request.getDriverId().equals(request.getSubDriverId())) {
@@ -250,11 +315,10 @@ public class TripService implements ITripService {
                     .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
         }
 
-        // 5. Update thông tin
         trip.setVehicle(newVehicle);
         trip.setDriver(newDriver);
         trip.setSubDriver(subDriver);
-        trip.setBasePrice(request.getPrice()); // Update giá vé (Lưu ý: Vé cũ đã mua sẽ không đổi giá, vé mới sẽ theo giá này)
+        trip.setBasePrice(request.getPrice());
 
         return tripRepository.save(trip);
     }

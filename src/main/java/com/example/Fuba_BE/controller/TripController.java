@@ -31,26 +31,33 @@ public class TripController {
     private final TripMapper tripMapper;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getTrips(
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+    public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getAllTrips(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "departureTime") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
+
+            // Filters
+            @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer originId,
-            @RequestParam(required = false) Integer destinationId,
-            @PageableDefault(page = 0, size = 20, sort = { "departureTime" }, direction = Sort.Direction.ASC) Pageable pageable
+            @RequestParam(required = false) Integer destId,
+            @RequestParam(required = false) Double minPrice,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+
+            // Advanced Filters
+            @RequestParam(required = false) List<String> timeRanges,
+            @RequestParam(required = false) List<String> vehicleTypes
     ) {
-        Page<Trip> tripPage = tripService.getTripsByFilters(status, date, originId, destinationId, pageable);
+        Page<TripDetailedResponseDTO> tripPage = tripService.getAllTrips(
+                page, size, sortBy, sortDir, search, originId, destId, minPrice, maxPrice, date, timeRanges, vehicleTypes
+        );
 
-        Page<TripDetailedResponseDTO> responsePage = tripPage.map(trip -> {
-            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
-            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
-                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
-            } else {
-                dto.setTotalSeats(40);
-            }
-            return tripService.enrichTripStats(dto, trip.getTripId());
-        });
+        // Enrich thêm thông tin stats (Booked/CheckedIn) nếu cần thiết
+        // (Tùy chọn: Nếu muốn hiển thị số ghế booked ngay ở danh sách thì uncomment dòng dưới)
+        // tripPage.forEach(dto -> tripService.enrichTripStats(dto, dto.getTripId()));
 
-        return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", responsePage));
+        return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", tripPage));
     }
 
     @PostMapping

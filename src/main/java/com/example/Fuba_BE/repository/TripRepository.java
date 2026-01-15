@@ -4,6 +4,7 @@ import com.example.Fuba_BE.domain.entity.Trip;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface TripRepository extends JpaRepository<Trip, Integer> {
+public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecificationExecutor<Trip> {
 
     // =========================================================================
     // PHẦN 1: KHÔI PHỤC CÁC HÀM CŨ (ĐỂ FIX LỖI BUILD ANALYTICS & DASHBOARD)
