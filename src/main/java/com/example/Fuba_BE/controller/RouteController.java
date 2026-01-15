@@ -43,8 +43,8 @@ public class RouteController {
             @PageableDefault(
                     page = 0,
                     size = 10,
-                    sort = "routeId",
-                    direction = Sort.Direction.ASC
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
             ) Pageable pageable
     ) {
         Page<RouteResponseDTO> result;
