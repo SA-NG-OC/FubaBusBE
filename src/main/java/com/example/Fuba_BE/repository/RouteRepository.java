@@ -2,6 +2,7 @@ package com.example.Fuba_BE.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -75,4 +76,21 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
     Page<Object[]> findRoutesWithAnalytics(@Param("start") LocalDateTime start,
                                            @Param("end") LocalDateTime end,
                                            Pageable pageable);
+
+    // =========================================================================
+    // TRIP GENERATION - REVERSE ROUTE LOOKUP
+    // =========================================================================
+
+    /**
+     * Find reverse route (for round-trip generation)
+     * Example: If route is HN → DN, find DN → HN
+     */
+    @Query("SELECT r FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
+    Optional<Route> findByOriginAndDestination(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
+
+    /**
+     * Check if reverse route exists
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
+    boolean existsReverseRoute(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
 }
