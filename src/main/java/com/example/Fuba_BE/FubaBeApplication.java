@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @SpringBootApplication
-@EnableJpaAuditing // Kích hoạt Auditing để @CreatedDate, @LastModifiedDate hoạt động (nếu dùng annotation chuẩn của Spring)
+@EnableJpaAuditing
 public class FubaBeApplication {
 
 	public static void main(String[] args) {

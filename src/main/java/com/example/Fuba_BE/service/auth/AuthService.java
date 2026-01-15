@@ -277,6 +277,27 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ApiResponse<String> validateResetToken(String token) {
+        log.info("Validating reset password token");
+
+        // Find user by reset token
+        User user = userRepository.findAll().stream()
+                .filter(u -> token.equals(u.getResetToken()))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Invalid reset token. The link may have been used or is incorrect."));
+
+        // Check token expiry
+        if (user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Reset token has expired. Please request a new password reset link.");
+        }
+
+        log.info("Reset token validated successfully for user: {}", user.getEmail());
+        return ApiResponse.success("Token is valid", 
+                "Please proceed to reset your password using POST request with your new password.");
+    }
+
+    @Override
     @Transactional
     public ApiResponse<AuthResponse> refreshToken(String refreshTokenStr) {
         log.info("Refresh token request");

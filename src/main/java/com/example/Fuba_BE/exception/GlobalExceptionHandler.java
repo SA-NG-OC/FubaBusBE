@@ -70,10 +70,19 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         
-        log.warn("Validation errors: {}", errors);
+        // Build detailed error message from all field errors
+        StringBuilder detailedMessage = new StringBuilder("Validation failed: ");
+        errors.forEach((field, message) -> 
+            detailedMessage.append(field).append(" - ").append(message).append("; ")
+        );
+        
+        // Log with request context
+        String objectName = ex.getBindingResult().getObjectName();
+        log.warn("⚠️ Validation failed for {}: {} field(s) with errors", objectName, errors.size());
+        errors.forEach((field, message) -> log.debug("  - {}: {}", field, message));
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.error("Validation failed", errors, "VALIDATION_ERROR"));
+                .body(ApiResponse.error(detailedMessage.toString().trim(), errors, "VALIDATION_ERROR"));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

@@ -11,6 +11,7 @@ import com.example.Fuba_BE.dto.Booking.BookingResponse;
 import com.example.Fuba_BE.dto.Booking.CounterBookingRequest;
 import com.example.Fuba_BE.dto.Booking.RescheduleRequest;
 import com.example.Fuba_BE.dto.Booking.RescheduleResponse;
+import com.example.Fuba_BE.dto.Booking.TicketCountResponse;
 
 /**
  * Service interface for booking operations.
@@ -107,6 +108,14 @@ public interface IBookingService {
     List<BookingResponse> getBookingsByPhone(String phone);
 
     /**
+     * Get bookings by email (for guest lookup)
+     *
+     * @param email The customer email
+     * @return List of BookingResponse
+     */
+    List<BookingResponse> getBookingsByEmail(String email);
+
+    /**
      * Cancel a booking
      *
      * @param bookingId The booking ID
@@ -144,4 +153,25 @@ public interface IBookingService {
      * @return BookingResponse with updated status
      */
     BookingResponse confirmBookingById(Integer bookingId);
+
+    /**
+     * Get bookings of current authenticated user with pagination and status filter.
+     * Returns tickets ordered by departure time.
+     *
+     * @param userId User ID from authentication
+     * @param status Optional booking status filter (Held, Paid, Cancelled, Completed)
+     * @param page   Page number (0-indexed)
+     * @param size   Page size
+     * @return BookingPageResponse with paginated bookings
+     */
+    BookingPageResponse getMyTickets(Integer userId, String status, Integer page, Integer size);
+
+    /**
+     * Count bookings of current authenticated user by status.
+     * Groups bookings into: Upcoming (Held + Paid), Completed, Cancelled.
+     *
+     * @param userId User ID from authentication
+     * @return TicketCountResponse with counts by status
+     */
+    TicketCountResponse getMyTicketsCount(Integer userId);
 }

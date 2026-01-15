@@ -93,6 +93,45 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findByCustomer(User customer);
 
     /**
+     * Find all bookings for a customer with pagination
+     */
+    Page<Booking> findByCustomer(User customer, Pageable pageable);
+
+    /**
+     * Find bookings by customer and status with pagination
+     */
+    Page<Booking> findByCustomerAndBookingStatus(User customer, String bookingStatus, Pageable pageable);
+
+    /**
+     * Find bookings by customer with status filter (multiple statuses) and future departure time
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customer = :customer AND b.bookingStatus IN :statuses AND b.trip.departureTime > :departureTime")
+    Page<Booking> findByCustomerAndBookingStatusInAndTripDepartureTimeAfter(
+            @Param("customer") User customer, 
+            @Param("statuses") List<String> statuses, 
+            @Param("departureTime") LocalDateTime departureTime, 
+            Pageable pageable);
+
+    /**
+     * Count all bookings for a customer
+     */
+    Long countByCustomer(User customer);
+
+    /**
+     * Count bookings by customer and status
+     */
+    Long countByCustomerAndBookingStatus(User customer, String bookingStatus);
+
+    /**
+     * Count bookings by customer with status filter (multiple statuses) and future departure time
+     */
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.customer = :customer AND b.bookingStatus IN :statuses AND b.trip.departureTime > :departureTime")
+    Long countByCustomerAndBookingStatusInAndTripDepartureTimeAfter(
+            @Param("customer") User customer, 
+            @Param("statuses") List<String> statuses, 
+            @Param("departureTime") LocalDateTime departureTime);
+
+    /**
      * Find all bookings for a customer by customer ID
      */
     @Query("SELECT b FROM Booking b WHERE b.customer.userId = :customerId ORDER BY b.createdAt DESC")
@@ -126,6 +165,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      */
     @Query("SELECT b FROM Booking b WHERE b.customerPhone = :phone ORDER BY b.createdAt DESC")
     List<Booking> findByCustomerPhone(@Param("phone") String phone);
+
+    /**
+     * Find booking by email
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customerEmail = :email ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerEmail(@Param("email") String email);
 
     /**
      * Find expired bookings based on holdExpiry timestamp.

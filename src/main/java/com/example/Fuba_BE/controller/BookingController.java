@@ -2,6 +2,7 @@ package com.example.Fuba_BE.controller;
 
 import com.example.Fuba_BE.dto.Booking.*;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.security.UserPrincipal;
 import com.example.Fuba_BE.service.Booking.IBookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -181,6 +183,17 @@ public class BookingController {
                 .build());
     }
 
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByEmail(
+            @PathVariable String email) {
+
+        return ResponseEntity.ok(ApiResponse.<List<BookingResponse>>builder()
+                .success(true)
+                .message("Lấy danh sách booking thành công")
+                .data(bookingService.getBookingsByEmail(email))
+                .build());
+    }
+
     /* ================= ACTION ================= */
 
     @PostMapping("/{bookingId}/cancel")
@@ -246,6 +259,47 @@ public class BookingController {
                 .success(true)
                 .message("Thanh toán thành công")
                 .data(bookingService.processPayment(bookingId, paymentDetails))
+                .build());
+    }
+
+    /* ================= MY TICKETS ================= */
+
+    @GetMapping("/my-tickets")
+    @Operation(summary = "Get my tickets with pagination", 
+               description = "Get bookings of current authenticated user. Filter by status: Upcoming (Held + Paid with future departure), Completed, Cancelled")
+    public ResponseEntity<ApiResponse<BookingPageResponse>> getMyTickets(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size) {
+
+        log.info("Get my tickets for user {}: status={}, page={}, size={}", 
+                currentUser.getUserId(), status, page, size);
+
+        BookingPageResponse response = bookingService.getMyTickets(
+                currentUser.getUserId(), status, page, size);
+
+        return ResponseEntity.ok(ApiResponse.<BookingPageResponse>builder()
+                .success(true)
+                .message("Lấy danh sách vé của tôi thành công")
+                .data(response)
+                .build());
+    }
+
+    @GetMapping("/my-tickets/count")
+    @Operation(summary = "Count my tickets by status", 
+               description = "Count bookings of current authenticated user grouped by status: Upcoming, Completed, Cancelled")
+    public ResponseEntity<ApiResponse<TicketCountResponse>> getMyTicketsCount(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+
+        log.info("Get my tickets count for user {}", currentUser.getUserId());
+
+        TicketCountResponse response = bookingService.getMyTicketsCount(currentUser.getUserId());
+
+        return ResponseEntity.ok(ApiResponse.<TicketCountResponse>builder()
+                .success(true)
+                .message("Lấy thống kê vé của tôi thành công")
+                .data(response)
                 .build());
     }
 }
