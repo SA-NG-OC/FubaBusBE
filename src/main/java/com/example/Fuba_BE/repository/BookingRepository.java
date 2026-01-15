@@ -167,6 +167,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findByCustomerPhone(@Param("phone") String phone);
 
     /**
+     * Find booking by email
+     */
+    @Query("SELECT b FROM Booking b WHERE b.customerEmail = :email ORDER BY b.createdAt DESC")
+    List<Booking> findByCustomerEmail(@Param("email") String email);
+
+    /**
      * Find expired bookings based on holdExpiry timestamp.
      * CRITICAL: Use holdExpiry (not createdAt or updatedAt) to determine expiration.
      * 

@@ -183,6 +183,17 @@ public class BookingController {
                 .build());
     }
 
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByEmail(
+            @PathVariable String email) {
+
+        return ResponseEntity.ok(ApiResponse.<List<BookingResponse>>builder()
+                .success(true)
+                .message("Lấy danh sách booking thành công")
+                .data(bookingService.getBookingsByEmail(email))
+                .build());
+    }
+
     /* ================= ACTION ================= */
 
     @PostMapping("/{bookingId}/cancel")

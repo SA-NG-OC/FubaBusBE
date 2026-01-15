@@ -108,6 +108,14 @@ public interface IBookingService {
     List<BookingResponse> getBookingsByPhone(String phone);
 
     /**
+     * Get bookings by email (for guest lookup)
+     *
+     * @param email The customer email
+     * @return List of BookingResponse
+     */
+    List<BookingResponse> getBookingsByEmail(String email);
+
+    /**
      * Cancel a booking
      *
      * @param bookingId The booking ID

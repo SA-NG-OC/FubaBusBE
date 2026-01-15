@@ -424,6 +424,18 @@ public class BookingService implements IBookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getBookingsByEmail(String email) {
+        List<Booking> bookings = bookingRepository.findByCustomerEmail(email);
+        return bookings.stream()
+                .map(booking -> {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public BookingResponse cancelBooking(Integer bookingId, String userId) {
         log.info("Cancelling booking {} by user {}", bookingId, userId);
