@@ -373,6 +373,16 @@ public class BookingService implements IBookingService {
 
     @Override
     @Transactional(readOnly = true)
+    public BookingResponse getBookingByTicketCode(String ticketCode) {
+        Booking booking = bookingRepository.findByTicketCode(ticketCode)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với mã vé: " + ticketCode));
+
+        List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+        return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByCustomerId(Integer customerId) {
         return getBookingsByCustomerId(customerId, null);
     }
@@ -415,6 +425,18 @@ public class BookingService implements IBookingService {
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByPhone(String phone) {
         List<Booking> bookings = bookingRepository.findByCustomerPhone(phone);
+        return bookings.stream()
+                .map(booking -> {
+                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getBookingsByEmail(String email) {
+        List<Booking> bookings = bookingRepository.findByCustomerEmail(email);
         return bookings.stream()
                 .map(booking -> {
                     List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());

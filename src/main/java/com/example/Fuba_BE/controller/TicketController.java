@@ -2,8 +2,10 @@ package com.example.Fuba_BE.controller;
 
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInRequestDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInResponseDTO;
+import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketScanResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.service.PdfService;
 import com.example.Fuba_BE.service.Ticket.ITicketService;
 import com.example.Fuba_BE.utils.QRCodeGenerator;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +15,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +29,8 @@ import org.springframework.web.bind.annotation.*;
 public class TicketController {
 
     private final ITicketService ticketService;
+    @Autowired
+    private PdfService pdfService;
 
     @Operation(summary = "Get ticket details by code", description = "Returns detailed ticket information for scanning (QR Code)")
     @ApiResponses(value = {
@@ -46,8 +53,8 @@ public class TicketController {
         );
     }
 
-    @Operation(summary = "Check-in ticket via QR code", 
-               description = "Validates and marks a ticket as checked-in (Used) after QR code scan")
+    @Operation(summary = "Check-in ticket via QR code",
+            description = "Validates and marks a ticket as checked-in (Used) after QR code scan")
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
@@ -73,9 +80,9 @@ public class TicketController {
         );
     }
 
-    @Operation(summary = "Quick check-in by ticket code", 
-               description = "Quick check-in using ticket code with optional trip validation. " +
-                            "If tripId is provided, validates that ticket belongs to the correct trip.")
+    @Operation(summary = "Quick check-in by ticket code",
+            description = "Quick check-in using ticket code with optional trip validation. " +
+                    "If tripId is provided, validates that ticket belongs to the correct trip.")
     @PostMapping("/check-in/{ticketCode}")
     public ResponseEntity<ApiResponse<TicketCheckInResponseDTO>> quickCheckIn(
             @PathVariable String ticketCode,
@@ -87,7 +94,7 @@ public class TicketController {
                 .vehicleId(vehicleId)
                 .checkInMethod("QR")
                 .build();
-        
+
         TicketCheckInResponseDTO response = ticketService.checkInTicket(request);
 
         return ResponseEntity.ok(
@@ -99,6 +106,7 @@ public class TicketController {
     @GetMapping(value = "/{ticketCode}/qr", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> generateTicketQR(@PathVariable String ticketCode) {
         try {
+            // Lưu ý: Cập nhật domain thật khi deploy
             String infoToEmbed = "http://127.0.0.1:5500/ticket.html?code=" + ticketCode;
 
             byte[] qrImage = QRCodeGenerator.generateQRCodeImage(infoToEmbed, 300, 300);
@@ -107,6 +115,29 @@ public class TicketController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @Operation(summary = "Export Ticket PDF", description = "Generate and download a PDF ticket with real data from DB")
+    @GetMapping("/{ticketId}/pdf")
+    public ResponseEntity<byte[]> exportTicketPdf(@PathVariable Integer ticketId) {
+        try {
+            // 1. Gọi Service lấy data thật từ DB
+            TicketExportDTO realData = ticketService.getTicketExportData(ticketId);
+
+            // 2. Tạo PDF từ data thật
+            byte[] pdfBytes = pdfService.generateTicketPdf(realData);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            // "inline" để xem trên trình duyệt, "attachment" để tải về
+            headers.setContentDispositionFormData("filename", "ticket_" + realData.getTicketCode() + ".pdf");
+
+            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }
