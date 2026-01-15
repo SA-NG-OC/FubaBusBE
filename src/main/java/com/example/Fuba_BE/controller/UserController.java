@@ -9,19 +9,25 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
+import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
+import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
+import com.example.Fuba_BE.dto.User.UpdateProfileRequest;
 import com.example.Fuba_BE.dto.User.UserResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.security.UserPrincipal;
 import com.example.Fuba_BE.service.User.IUserService;
 
 import jakarta.validation.Valid;
@@ -29,7 +35,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Controller for user management (admin operations)
+ * Controller for user management (admin operations & profile management)
  */
 @RestController
 @RequestMapping("/users")
@@ -38,6 +44,8 @@ import lombok.extern.slf4j.Slf4j;
 public class UserController {
 
     private final IUserService userService;
+
+    // --- Admin User Management ---
 
     /**
      * Admin creates user with specific role
@@ -128,5 +136,98 @@ public class UserController {
         log.info("📥 Request to delete user ID: {}", id);
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
+    }
+
+    // --- Profile Management (Self) ---
+
+    /**
+     * Get own profile
+     * Any authenticated user can view their own profile
+     */
+    @GetMapping("/profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<ProfileResponseDTO>> getMyProfile(
+            Authentication authentication
+    ) {
+        Integer userId = extractUserId(authentication);
+        log.info("📥 User {} requesting own profile", userId);
+        
+        ProfileResponseDTO profile = userService.getMyProfile(userId);
+        return ResponseEntity.ok(ApiResponse.success("Profile retrieved successfully", profile));
+    }
+
+    /**
+     * Update own profile
+     * Any authenticated user can update their own profile
+     */
+    @PutMapping("/profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<ProfileResponseDTO>> updateMyProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            Authentication authentication
+    ) {
+        Integer userId = extractUserId(authentication);
+        log.info("📥 User {} updating own profile", userId);
+        
+        ProfileResponseDTO profile = userService.updateMyProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", profile));
+    }
+
+    /**
+     * Change own password
+     * Any authenticated user can change their own password
+     */
+    @PutMapping("/profile/password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateMyPassword(
+            @Valid @RequestBody UpdatePasswordRequest request,
+            Authentication authentication
+    ) {
+        Integer userId = extractUserId(authentication);
+        log.info("📥 User {} changing password", userId);
+        
+        userService.updateMyPassword(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Password updated successfully", null));
+    }
+
+    // --- Employee Profile Management (Admin/Staff) ---
+
+    /**
+     * Get employee profile by ID
+     * ADMIN and STAFF can view employee profiles
+     */
+    @GetMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<ProfileResponseDTO>> getEmployeeProfile(
+            @PathVariable Integer id
+    ) {
+        log.info("📥 Admin/Staff requesting employee profile for ID: {}", id);
+        ProfileResponseDTO profile = userService.getEmployeeProfile(id);
+        return ResponseEntity.ok(ApiResponse.success("Employee profile retrieved successfully", profile));
+    }
+
+    /**
+     * Update employee profile by ID
+     * ADMIN and STAFF can update employee profiles
+     */
+    @PutMapping("/{id}/profile")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<ProfileResponseDTO>> updateEmployeeProfile(
+            @PathVariable Integer id,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        log.info("📥 Admin/Staff updating employee profile for ID: {}", id);
+        ProfileResponseDTO profile = userService.updateEmployeeProfile(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Employee profile updated successfully", profile));
+    }
+
+    // --- Helper Methods ---
+
+    /**
+     * Extract user ID from authentication token
+     */
+    private Integer extractUserId(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        return userPrincipal.getUserId();
     }
 }

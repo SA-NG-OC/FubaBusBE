@@ -6,6 +6,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
+import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
+import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
+import com.example.Fuba_BE.dto.User.UpdateProfileRequest;
 import com.example.Fuba_BE.dto.User.UserResponseDTO;
 
 public interface IUserService {
@@ -39,4 +42,31 @@ public interface IUserService {
      * Delete user (soft delete by changing status)
      */
     void deleteUser(Integer userId);
+
+    // --- Profile Management ---
+
+    /**
+     * Get own profile (authenticated user)
+     */
+    ProfileResponseDTO getMyProfile(Integer userId);
+
+    /**
+     * Update own profile (authenticated user)
+     */
+    ProfileResponseDTO updateMyProfile(Integer userId, UpdateProfileRequest request);
+
+    /**
+     * Change own password (authenticated user)
+     */
+    void updateMyPassword(Integer userId, UpdatePasswordRequest request);
+
+    /**
+     * Get employee profile by ID (ADMIN/STAFF only)
+     */
+    ProfileResponseDTO getEmployeeProfile(Integer employeeId);
+
+    /**
+     * Update employee profile by ID (ADMIN/STAFF only)
+     */
+    ProfileResponseDTO updateEmployeeProfile(Integer employeeId, UpdateProfileRequest request);
 }

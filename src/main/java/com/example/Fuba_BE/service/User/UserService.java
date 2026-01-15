@@ -12,9 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.Fuba_BE.domain.entity.Role;
 import com.example.Fuba_BE.domain.entity.User;
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
+import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
+import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
+import com.example.Fuba_BE.dto.User.UpdateProfileRequest;
 import com.example.Fuba_BE.dto.User.UserResponseDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
+import com.example.Fuba_BE.exception.UnauthorizedException;
 import com.example.Fuba_BE.mapper.UserMapper;
 import com.example.Fuba_BE.repository.RoleRepository;
 import com.example.Fuba_BE.repository.UserRepository;
@@ -152,6 +156,143 @@ public class UserService implements IUserService {
         userRepository.save(user);
 
         log.info("✅ User soft deleted successfully: ID {}", userId);
+    }
+
+    // --- Profile Management ---
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileResponseDTO getMyProfile(Integer userId) {
+        log.info("🔍 Fetching profile for user ID: {}", userId);
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("❌ User not found with ID: {}", userId);
+                    return new ResourceNotFoundException("User not found with ID: " + userId);
+                });
+        
+        return userMapper.toProfileResponseDTO(user);
+    }
+
+    @Override
+    public ProfileResponseDTO updateMyProfile(Integer userId, UpdateProfileRequest request) {
+        log.info("🔄 Updating profile for user ID: {}", userId);
+        
+        try {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> {
+                        log.error("❌ User not found with ID: {}", userId);
+                        return new ResourceNotFoundException("User not found with ID: " + userId);
+                    });
+
+            // Validate phone number uniqueness if changed
+            if (request.getPhoneNumber() != null && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
+                validatePhoneNotExists(request.getPhoneNumber());
+            }
+
+            // Update basic fields
+            user.setFullName(request.getFullName());
+            if (request.getPhoneNumber() != null) {
+                user.setPhoneNumber(request.getPhoneNumber());
+            }
+
+            User updatedUser = userRepository.save(user);
+            log.info("✅ Profile updated successfully for user ID: {}", userId);
+            
+            return userMapper.toProfileResponseDTO(updatedUser);
+
+        } catch (BadRequestException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("🔥 Error updating profile for user ID {}: {}", userId, e.getMessage(), e);
+            throw new BadRequestException("Failed to update profile: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void updateMyPassword(Integer userId, UpdatePasswordRequest request) {
+        log.info("🔐 Updating password for user ID: {}", userId);
+        
+        try {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> {
+                        log.error("❌ User not found with ID: {}", userId);
+                        return new ResourceNotFoundException("User not found with ID: " + userId);
+                    });
+
+            // Verify current password
+            if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                log.warn("⚠️ Incorrect current password for user ID: {}", userId);
+                throw new UnauthorizedException("Current password is incorrect");
+            }
+
+            // Verify password confirmation
+            if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+                log.warn("⚠️ Password confirmation mismatch for user ID: {}", userId);
+                throw new BadRequestException("New password and confirmation do not match");
+            }
+
+            // Update password
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            userRepository.save(user);
+            
+            log.info("✅ Password updated successfully for user ID: {}", userId);
+
+        } catch (UnauthorizedException | BadRequestException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("🔥 Error updating password for user ID {}: {}", userId, e.getMessage(), e);
+            throw new BadRequestException("Failed to update password: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileResponseDTO getEmployeeProfile(Integer employeeId) {
+        log.info("🔍 Admin/Staff fetching employee profile for ID: {}", employeeId);
+        
+        User employee = userRepository.findById(employeeId)
+                .orElseThrow(() -> {
+                    log.error("❌ Employee not found with ID: {}", employeeId);
+                    return new ResourceNotFoundException("Employee not found with ID: " + employeeId);
+                });
+        
+        return userMapper.toProfileResponseDTO(employee);
+    }
+
+    @Override
+    public ProfileResponseDTO updateEmployeeProfile(Integer employeeId, UpdateProfileRequest request) {
+        log.info("🔄 Admin/Staff updating employee profile for ID: {}", employeeId);
+        
+        try {
+            User employee = userRepository.findById(employeeId)
+                    .orElseThrow(() -> {
+                        log.error("❌ Employee not found with ID: {}", employeeId);
+                        return new ResourceNotFoundException("Employee not found with ID: " + employeeId);
+                    });
+
+            // Validate phone number uniqueness if changed
+            if (request.getPhoneNumber() != null && !request.getPhoneNumber().equals(employee.getPhoneNumber())) {
+                validatePhoneNotExists(request.getPhoneNumber());
+            }
+
+            // Update basic fields
+            employee.setFullName(request.getFullName());
+            if (request.getPhoneNumber() != null) {
+                employee.setPhoneNumber(request.getPhoneNumber());
+            }
+
+            User updatedEmployee = userRepository.save(employee);
+            log.info("✅ Employee profile updated successfully for ID: {}", employeeId);
+            
+            return userMapper.toProfileResponseDTO(updatedEmployee);
+
+        } catch (BadRequestException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("🔥 Error updating employee profile for ID {}: {}", employeeId, e.getMessage(), e);
+            throw new BadRequestException("Failed to update employee profile: " + e.getMessage());
+        }
     }
 
     // --- Validation Helpers ---
