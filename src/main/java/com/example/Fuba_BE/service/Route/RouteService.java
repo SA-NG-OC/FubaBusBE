@@ -1,5 +1,19 @@
 package com.example.Fuba_BE.service.Route;
 
+import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
 import com.example.Fuba_BE.domain.entity.Location;
 import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.domain.entity.RouteStop;
@@ -14,20 +28,8 @@ import com.example.Fuba_BE.mapper.SelectionMapper;
 import com.example.Fuba_BE.repository.LocationRepository;
 import com.example.Fuba_BE.repository.RouteRepository;
 import com.example.Fuba_BE.repository.RouteStopRepository;
-import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -40,23 +42,29 @@ public class RouteService implements IRouteService {
     private final RouteMapper routeMapper;
     private final SelectionMapper selectionMapper;
 
-    // Sử dụng SLF4J chuẩn của Spring Boot
+    // Use SLF4J standard from Spring Boot
     private static final Logger log = LoggerFactory.getLogger(RouteService.class);
 
-    // --- Helper: Tìm Location theo tên ---
+    // --- Helper: Find Location by name ---
     private Location getLocationByName(String locationName) {
         return locationRepository.findByLocationName(locationName)
                 .orElseThrow(() -> {
-                    log.error("❌ Lỗi: Không tìm thấy địa điểm có tên '{}'", locationName);
-                    return new ResourceNotFoundException("Không tìm thấy địa điểm: " + locationName);
+                    log.error("❌ Error: Location not found with name '{}'", locationName);
+                    return new ResourceNotFoundException("Location not found: " + locationName);
                 });
     }
 
     @Override
     public RouteResponseDTO createRoute(RouteRequestDTO request) {
-        log.info("🚀 Bắt đầu tạo Route mới: {} -> {}", request.getOriginName(), request.getDestinationName());
+        log.info("🚀 Creating new route: {} -> {}", request.getOriginName(), request.getDestinationName());
         try {
+            // Validate all locations exist BEFORE starting transaction
+            validateAllLocationsExist(request);
+            // Validate business rules
             validateRouteRequest(request);
+            // Check for duplicate route
+            checkDuplicateRoute(request);
+            
             Route route = routeMapper.toEntity(request);
 
             Location origin = getLocationByName(request.getOriginName());
@@ -67,28 +75,35 @@ public class RouteService implements IRouteService {
             if (route.getStatus() == null) route.setStatus("Active");
 
             Route savedRoute = routeRepository.save(route);
-            log.info("✅ Đã lưu Route entity với ID: {}", savedRoute.getRouteId());
+            log.info("✅ Route entity saved with ID: {}", savedRoute.getRouteId());
 
             createRouteStops(savedRoute, origin, destination, request.getIntermediateStopNames());
-            log.info("✅ Đã tạo xong các RouteStop cho Route ID: {}", savedRoute.getRouteId());
+            log.info("✅ Route stops created for Route ID: {}", savedRoute.getRouteId());
 
             return enrichSingleRoute(savedRoute);
 
+        } catch (BadRequestException | ResourceNotFoundException e) {
+            // Re-throw known exceptions
+            throw e;
         } catch (Exception e) {
-            log.error("🔥 Lỗi nghiêm trọng khi tạo Route: {}", e.getMessage(), e);
-            throw e; // Ném tiếp lỗi để Controller xử lý
+            log.error("🔥 Critical error creating route: {}", e.getMessage(), e);
+            throw new BadRequestException("Failed to create route: " + e.getMessage());
         }
     }
 
     @Override
     public RouteResponseDTO updateRoute(Integer routeId, RouteRequestDTO request) {
-        log.info("🔄 Bắt đầu cập nhật Route ID: {}", routeId);
+        log.info("🔄 Updating route ID: {}", routeId);
         try {
+            // Validate all locations exist BEFORE starting transaction
+            validateAllLocationsExist(request);
+            // Validate business rules
             validateRouteRequest(request);
+            
             Route route = routeRepository.findById(routeId)
                     .orElseThrow(() -> {
-                        log.error("❌ Không tìm thấy Route ID: {} để update", routeId);
-                        return new ResourceNotFoundException("Route not found: " + routeId);
+                        log.error("❌ Route not found for update: ID {}", routeId);
+                        return new ResourceNotFoundException("Route not found with ID: " + routeId);
                     });
 
             routeMapper.updateEntityFromDto(request, route);
@@ -98,37 +113,41 @@ public class RouteService implements IRouteService {
             route.setDestination(destination);
 
             Route updatedRoute = routeRepository.save(route);
-            log.info("✅ Đã cập nhật thông tin cơ bản Route ID: {}", routeId);
+            log.info("✅ Route basic info updated for ID: {}", routeId);
 
-            // Logic xóa đi tạo lại
-            log.info("🧹 Đang xóa các RouteStop cũ của Route ID: {}", routeId);
+            // Delete and recreate route stops
+            log.info("🧹 Deleting old route stops for Route ID: {}", routeId);
             routeStopRepository.deleteAll(routeStopRepository.findByRoute_RouteIdOrderByStopOrderAsc(routeId));
             routeStopRepository.flush();
 
-            log.info("🛠 Đang tạo lại các RouteStop mới...");
+            log.info("🛠 Creating new route stops...");
             createRouteStops(updatedRoute, origin, destination, request.getIntermediateStopNames());
 
             return enrichSingleRoute(updatedRoute);
 
-        } catch (Exception e) {
-            log.error("🔥 Lỗi nghiêm trọng khi update Route ID {}: {}", routeId, e.getMessage(), e);
+        } catch (BadRequestException | ResourceNotFoundException e) {
             throw e;
+        } catch (Exception e) {
+            log.error("🔥 Critical error updating route ID {}: {}", routeId, e.getMessage(), e);
+            throw new BadRequestException("Failed to update route: " + e.getMessage());
         }
     }
 
     @Override
     public void deleteRoute(Integer routeId) {
-        log.info("🗑 Yêu cầu xóa Route ID: {}", routeId);
+        log.info("🗑 Deleting route ID: {}", routeId);
         try {
             if (!routeRepository.existsById(routeId)) {
-                log.error("❌ Không thể xóa vì không tìm thấy Route ID: {}", routeId);
-                throw new ResourceNotFoundException("Route not found: " + routeId);
+                log.error("❌ Cannot delete - route not found: ID {}", routeId);
+                throw new ResourceNotFoundException("Route not found with ID: " + routeId);
             }
             routeRepository.deleteById(routeId);
-            log.info("✅ Đã xóa thành công Route ID: {}", routeId);
-        } catch (Exception e) {
-            log.error("🔥 Lỗi khi xóa Route ID {}: {}", routeId, e.getMessage(), e);
+            log.info("✅ Route deleted successfully: ID {}", routeId);
+        } catch (ResourceNotFoundException e) {
             throw e;
+        } catch (Exception e) {
+            log.error("🔥 Error deleting route ID {}: {}", routeId, e.getMessage(), e);
+            throw new BadRequestException("Failed to delete route: " + e.getMessage());
         }
     }
 
@@ -144,7 +163,7 @@ public class RouteService implements IRouteService {
     @Override
     @Transactional(readOnly = true)
     public Page<RouteResponseDTO> searchRoutes(String keyword, Pageable pageable) {
-        log.info("🔎 Tìm kiếm Routes với từ khóa: '{}'", keyword);
+        log.info("🔎 Searching routes with keyword: '{}'", keyword);
         Page<Route> page;
         if (!StringUtils.hasText(keyword)) {
             page = routeRepository.findAll(pageable);
@@ -193,23 +212,75 @@ public class RouteService implements IRouteService {
 
     private void validateRouteRequest(RouteRequestDTO request) {
         if (request.getOriginName() == null || request.getDestinationName() == null) {
-            log.warn("⚠️ Validate thất bại: Điểm đi hoặc đến bị null");
-            throw new BadRequestException("Điểm đi và điểm đến không được để trống");
+            log.warn("⚠️ Validation failed: Origin or destination is null");
+            throw new BadRequestException("Origin and destination cannot be empty");
         }
         if (request.getOriginName().equalsIgnoreCase(request.getDestinationName())) {
-            log.warn("⚠️ Validate thất bại: Điểm đi trùng điểm đến ({})", request.getOriginName());
-            throw new BadRequestException("Điểm đi và điểm đến không được trùng nhau");
+            log.warn("⚠️ Validation failed: Origin equals destination ({})", request.getOriginName());
+            throw new BadRequestException("Origin and destination must be different");
+        }
+    }
+
+    /**
+     * Validate all locations exist BEFORE starting transaction
+     * This prevents partial rollback and provides better error messages
+     */
+    private void validateAllLocationsExist(RouteRequestDTO request) {
+        log.debug("Validating all locations exist...");
+        
+        // Check origin
+        locationRepository.findByLocationName(request.getOriginName())
+                .orElseThrow(() -> {
+                    log.error("❌ Origin location not found: '{}'", request.getOriginName());
+                    return new ResourceNotFoundException("Origin location not found: " + request.getOriginName());
+                });
+        
+        // Check destination
+        locationRepository.findByLocationName(request.getDestinationName())
+                .orElseThrow(() -> {
+                    log.error("❌ Destination location not found: '{}'", request.getDestinationName());
+                    return new ResourceNotFoundException("Destination location not found: " + request.getDestinationName());
+                });
+        
+        // Check all intermediate stops
+        if (request.getIntermediateStopNames() != null && !request.getIntermediateStopNames().isEmpty()) {
+            for (String stopName : request.getIntermediateStopNames()) {
+                String normalized = stopName.trim();
+                if (!normalized.isEmpty()) {
+                    locationRepository.findByLocationName(normalized)
+                            .orElseThrow(() -> {
+                                log.error("❌ Intermediate stop location not found: '{}'", normalized);
+                                return new ResourceNotFoundException("Intermediate stop location not found: " + normalized);
+                            });
+                }
+            }
+        }
+        
+        log.debug("✅ All locations validated successfully");
+    }
+
+    /**
+     * Check if a route with the same origin and destination already exists
+     */
+    private void checkDuplicateRoute(RouteRequestDTO request) {
+        Location origin = locationRepository.findByLocationName(request.getOriginName()).get();
+        Location destination = locationRepository.findByLocationName(request.getDestinationName()).get();
+        
+        boolean exists = routeRepository.existsByOriginAndDestination(origin, destination);
+        if (exists) {
+            log.warn("⚠️ Duplicate route detected: {} -> {}", request.getOriginName(), request.getDestinationName());
+            throw new BadRequestException("Route from " + request.getOriginName() + " to " + request.getDestinationName() + " already exists");
         }
     }
 
     private void createRouteStops(Route route, Location origin, Location destination, List<String> intermediateStopNames) {
-        log.debug("...Đang tạo stops cho Route ID: {}", route.getRouteId());
+        log.debug("Creating stops for Route ID: {}", route.getRouteId());
         int orderCounter = 1;
 
         // 1. Start Stop
         RouteStop startStop = createStop(route, origin, orderCounter++, "ORIGIN", true, false, BigDecimal.ZERO, 0);
         routeStopRepository.save(startStop);
-        log.debug("   + Đã tạo Origin Stop: {}", origin.getLocationName());
+        log.debug("   + Origin stop created: {}", origin.getLocationName());
 
         // 2. Intermediate Stops
         if (intermediateStopNames != null) {
@@ -217,21 +288,21 @@ public class RouteService implements IRouteService {
                 String normalized = stopName.trim();
                 if (normalized.equalsIgnoreCase(origin.getLocationName()) ||
                         normalized.equalsIgnoreCase(destination.getLocationName())) {
-                    log.warn("   ⚠️ Bỏ qua stop trùng lặp: {}", stopName);
+                    log.warn("   ⚠️ Skipping duplicate stop: {}", stopName);
                     continue;
                 }
 
                 Location loc = getLocationByName(stopName);
                 RouteStop stop = createStop(route, loc, orderCounter++, "INTERMEDIATE", true, true, BigDecimal.ZERO, 0);
                 routeStopRepository.save(stop);
-                log.debug("   + Đã tạo Intermediate Stop: {}", stopName);
+                log.debug("   + Intermediate stop created: {}", stopName);
             }
         }
 
         // 3. End Stop
         RouteStop endStop = createStop(route, destination, orderCounter, "DESTINATION", false, true, route.getDistance(), route.getEstimatedDuration());
         routeStopRepository.save(endStop);
-        log.debug("   + Đã tạo Destination Stop: {}", destination.getLocationName());
+        log.debug("   + Destination stop created: {}", destination.getLocationName());
     }
 
     private RouteStop createStop(Route route, Location loc, int order, String type, boolean pickup, boolean dropoff, BigDecimal dist, int time) {

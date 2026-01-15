@@ -76,7 +76,10 @@ public class GlobalExceptionHandler {
             detailedMessage.append(field).append(" - ").append(message).append("; ")
         );
         
-        log.warn("Validation errors: {}", errors);
+        // Log with request context
+        String objectName = ex.getBindingResult().getObjectName();
+        log.warn("⚠️ Validation failed for {}: {} field(s) with errors", objectName, errors.size());
+        errors.forEach((field, message) -> log.debug("  - {}: {}", field, message));
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.error(detailedMessage.toString().trim(), errors, "VALIDATION_ERROR"));

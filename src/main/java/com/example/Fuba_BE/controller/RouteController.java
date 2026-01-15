@@ -8,6 +8,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,7 +43,7 @@ public class RouteController {
             
             @PageableDefault(
                     page = 0,
-                    size = 10,
+                    size = 20,
                     sort = "routeId",
                     direction = Sort.Direction.ASC
             ) Pageable pageable
@@ -65,6 +66,7 @@ public class RouteController {
     }
 
         @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> createRoute(
             @Valid @RequestBody RouteRequestDTO request
     ) {
@@ -74,9 +76,9 @@ public class RouteController {
     }
 
         @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> updateRoute(
             @PathVariable Integer id,
-            
             @Valid @RequestBody RouteRequestDTO request
     ) {
         RouteResponseDTO response = routeService.updateRoute(id, request);
@@ -84,6 +86,7 @@ public class RouteController {
     }
 
         @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteRoute(
             @PathVariable Integer id
     ) {
