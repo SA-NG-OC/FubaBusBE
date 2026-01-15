@@ -45,9 +45,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
     @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.vehicleType WHERE LOWER(v.licensePlate) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     Page<Vehicle> findByLicensePlateContainingIgnoreCase(@Param("keyword") String licensePlate, Pageable pageable);
 
-    /**
-     * Get all vehicles with vehicle type for selection dropdown
-     */
-    @Query("SELECT v FROM Vehicle v JOIN FETCH v.vehicleType WHERE v.status = 'opertional'")
+    @Query("SELECT v FROM Vehicle v JOIN FETCH v.vehicleType")
     List<Vehicle> findAllWithVehicleType();
 }
