@@ -11,6 +11,7 @@ import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.repository.*;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -49,7 +50,8 @@ public class TripService implements ITripService {
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
                                                      String search, Integer originId, Integer destId,
                                                      Double minPrice, Double maxPrice, LocalDate date,
-                                                     List<String> timeRanges, List<String> vehicleTypes) {
+                                                     List<String> timeRanges, List<String> vehicleTypes,
+                                                     Integer minAvailableSeats) { // [NEW] Param
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
@@ -59,7 +61,7 @@ public class TripService implements ITripService {
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Search Keyword
+            // ... (Các filter cũ: Search, Origin, Dest, Price, Date... GIỮ NGUYÊN) ...
             if (search != null && !search.isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("routeName")), "%" + search.toLowerCase() + "%"));
             }
@@ -81,39 +83,55 @@ public class TripService implements ITripService {
                 predicates.add(cb.between(root.get("departureTime"), startOfDay, endOfDay));
             }
 
-            // --- Time Ranges ---
+            // ... (Filter TimeRanges và VehicleTypes... GIỮ NGUYÊN) ...
             if (timeRanges != null && !timeRanges.isEmpty()) {
                 List<Predicate> timePredicates = new ArrayList<>();
                 Expression<Integer> hourExp = cb.function("hour", Integer.class, root.get("departureTime"));
-
                 for (String range : timeRanges) {
                     switch (range.toLowerCase()) {
-                        case "morning":
-                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 6), cb.lessThan(hourExp, 12))); break;
-                        case "afternoon":
-                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 12), cb.lessThan(hourExp, 18))); break;
-                        case "evening":
-                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 18), cb.lessThan(hourExp, 24))); break;
-                        case "night":
-                            timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 0), cb.lessThan(hourExp, 6))); break;
+                        case "morning": timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 6), cb.lessThan(hourExp, 12))); break;
+                        case "afternoon": timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 12), cb.lessThan(hourExp, 18))); break;
+                        case "evening": timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 18), cb.lessThan(hourExp, 24))); break;
+                        case "night": timePredicates.add(cb.and(cb.greaterThanOrEqualTo(hourExp, 0), cb.lessThan(hourExp, 6))); break;
                     }
                 }
-                if (!timePredicates.isEmpty()) {
-                    predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
-                }
+                if (!timePredicates.isEmpty()) predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
             }
-
-            // --- Bus Types ---
             if (vehicleTypes != null && !vehicleTypes.isEmpty()) {
                 predicates.add(root.get("vehicle").get("vehicleType").get("typeName").in(vehicleTypes));
+            }
+
+            // --- [NEW] Filter Min Available Seats ---
+            if (minAvailableSeats != null && minAvailableSeats > 0) {
+                // Tạo Subquery: SELECT COUNT(s) FROM TripSeat s WHERE s.trip = t AND s.status = 'Available'
+                Subquery<Long> sub = query.subquery(Long.class);
+                jakarta.persistence.criteria.Root<TripSeat> subRoot = sub.from(TripSeat.class);
+
+                sub.select(cb.count(subRoot));
+                sub.where(
+                        cb.equal(subRoot.get("trip"), root), // Join với Trip hiện tại
+                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName()) // Chỉ đếm ghế Available
+                );
+
+                // Điều kiện: Số ghế Available >= minAvailableSeats
+                predicates.add(cb.greaterThanOrEqualTo(sub, minAvailableSeats.longValue()));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
         Page<Trip> tripPage = tripRepository.findAll(spec, pageable);
-        // Map sang TripDetailedResponseDTO để khớp với code cũ
-        return tripPage.map(tripMapper::toDetailedDTO);
+        return tripPage.map(trip -> {
+            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
+
+            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+            } else {
+                dto.setTotalSeats(40); // Default fallback
+            }
+
+            return this.enrichTripStats(dto, trip.getTripId());
+        });
     }
 
     @Override
