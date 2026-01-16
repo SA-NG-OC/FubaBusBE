@@ -176,4 +176,13 @@ public class TripController {
         tripService.completeTrip(tripId, request);
         return ResponseEntity.ok(ApiResponse.success("Trip completed successfully", null));
     }
+
+    // [UPDATED] API lấy chi tiết chuyến xe theo ID
+    @GetMapping("/{tripId}")
+    public ResponseEntity<ApiResponse<TripDetailedResponseDTO>> getTripById(@PathVariable Integer tripId) {
+        // Gọi hàm Service mới đã trả về DTO đầy đủ
+        TripDetailedResponseDTO responseDTO = tripService.getTripDetailById(tripId);
+
+        return ResponseEntity.ok(ApiResponse.success("Trip retrieved successfully", responseDTO));
+    }
 }

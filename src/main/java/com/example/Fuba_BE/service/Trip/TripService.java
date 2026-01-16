@@ -472,4 +472,19 @@ public class TripService implements ITripService {
 
         tripRepository.save(trip);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(trip);
+
+        if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+            responseDTO.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+        }
+
+        return this.enrichTripStats(responseDTO, tripId);
+    }
 }

@@ -45,4 +45,6 @@ public interface ITripService {
     TicketDetailResponseDTO getTicketDetail(Integer ticketId);
 
     void completeTrip(Integer tripId, CompleteTripRequestDTO request);
+
+    TripDetailedResponseDTO getTripDetailById(Integer tripId);
 }
