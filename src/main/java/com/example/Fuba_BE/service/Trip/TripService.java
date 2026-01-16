@@ -1,5 +1,6 @@
 package com.example.Fuba_BE.service.Trip;
 
+import java.math.BigDecimal; // [NEW] Cần import để ép kiểu so sánh giá
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -64,15 +65,15 @@ public class TripService implements ITripService {
     private final TicketRepository ticketRepository;
     private final PassengerRepository passengerRepository;
     private final PassengerOnTripMapper passengerOnTripMapper;
-    private final TripMapper tripMapper; // [NEW] Inject thêm mapper
+    private final TripMapper tripMapper;
 
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-            String search, Integer originId, Integer destId,
-            Double minPrice, Double maxPrice, LocalDate date,
-            List<String> timeRanges, List<String> vehicleTypes,
-            Integer minAvailableSeats) { // [NEW] Param
+                                                     String search, Integer originId, Integer destId,
+                                                     Double minPrice, Double maxPrice, LocalDate date,
+                                                     List<String> timeRanges, List<String> vehicleTypes,
+                                                     Integer minAvailableSeats) {
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
@@ -82,7 +83,7 @@ public class TripService implements ITripService {
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // ... (Các filter cũ: Search, Origin, Dest, Price, Date... GIỮ NGUYÊN) ...
+            // 1. Search (Route Name)
             if (search != null && !search.isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("routeName")), "%" + search.toLowerCase() + "%"));
             }
@@ -92,22 +93,29 @@ public class TripService implements ITripService {
             if (destId != null) {
                 predicates.add(cb.equal(root.get("route").get("destination").get("id"), destId));
             }
+
+            // 2. Price Range [FIXED]: Sửa "price" thành "basePrice" và ép kiểu BigDecimal
             if (minPrice != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("price"), minPrice));
+                predicates.add(cb.greaterThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(minPrice)));
             }
             if (maxPrice != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("price"), maxPrice));
+                predicates.add(cb.lessThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(maxPrice)));
             }
+
             if (date != null) {
                 LocalDateTime startOfDay = date.atStartOfDay();
                 LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
                 predicates.add(cb.between(root.get("departureTime"), startOfDay, endOfDay));
             }
 
-            // ... (Filter TimeRanges và VehicleTypes... GIỮ NGUYÊN) ...
+            // 3. Time Ranges [FIXED]: Sửa cho PostgreSQL (Supabase) dùng date_part
             if (timeRanges != null && !timeRanges.isEmpty()) {
                 List<Predicate> timePredicates = new ArrayList<>();
-                Expression<Integer> hourExp = cb.function("hour", Integer.class, root.get("departureTime"));
+
+                // Fix: Dùng date_part thay vì function("hour")
+                Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"), root.get("departureTime"));
+                Expression<Integer> hourExp = hourDouble.as(Integer.class);
+
                 for (String range : timeRanges) {
                     switch (range.toLowerCase()) {
                         case "morning":
@@ -127,24 +135,22 @@ public class TripService implements ITripService {
                 if (!timePredicates.isEmpty())
                     predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
             }
+
+            // 4. Vehicle Types
             if (vehicleTypes != null && !vehicleTypes.isEmpty()) {
                 predicates.add(root.get("vehicle").get("vehicleType").get("typeName").in(vehicleTypes));
             }
 
-            // --- [NEW] Filter Min Available Seats ---
+            // 5. Min Available Seats (Subquery)
             if (minAvailableSeats != null && minAvailableSeats > 0) {
-                // Tạo Subquery: SELECT COUNT(s) FROM TripSeat s WHERE s.trip = t AND s.status =
-                // 'Available'
                 Subquery<Long> sub = query.subquery(Long.class);
                 jakarta.persistence.criteria.Root<TripSeat> subRoot = sub.from(TripSeat.class);
 
                 sub.select(cb.count(subRoot));
                 sub.where(
-                        cb.equal(subRoot.get("trip"), root), // Join với Trip hiện tại
-                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName()) // Chỉ đếm ghế Available
+                        cb.equal(subRoot.get("trip"), root),
+                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName())
                 );
-
-                // Điều kiện: Số ghế Available >= minAvailableSeats
                 predicates.add(cb.greaterThanOrEqualTo(sub, minAvailableSeats.longValue()));
             }
 
@@ -165,10 +171,12 @@ public class TripService implements ITripService {
         });
     }
 
+    // ... CÁC HÀM KHÁC GIỮ NGUYÊN NHƯ CŨ ...
+
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId,
-            Pageable pageable) {
+                                        Pageable pageable) {
         String filterStatus = StringUtils.hasText(status) ? status : null;
         LocalDateTime start = null;
         LocalDateTime end = null;
@@ -206,12 +214,10 @@ public class TripService implements ITripService {
     @Override
     @Transactional
     public Trip createTrip(TripCreateRequestDTO request) {
-        // Validate Time
         LocalDateTime departureTime = LocalDateTime.of(request.getDate(), request.getDepartureTime());
         if (departureTime.isBefore(LocalDateTime.now()))
             throw new BadRequestException("Thời gian khởi hành không được ở trong quá khứ!");
 
-        // Fetch
         Route route = routeRepository.findById(request.getRouteId())
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found"));
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
@@ -219,13 +225,11 @@ public class TripService implements ITripService {
         Driver driver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
-        // Check Role Main Driver
         if (driver.getUser() == null || driver.getUser().getRole() == null ||
                 !"DRIVER".equalsIgnoreCase(driver.getUser().getRole().getRoleName())) {
             throw new BadRequestException("Người lái chính không phải là Tài xế (Role DRIVER)");
         }
 
-        // Sub Driver
         Driver subDriver = null;
         if (request.getSubDriverId() != null) {
             subDriver = driverRepository.findById(request.getSubDriverId())
@@ -238,11 +242,9 @@ public class TripService implements ITripService {
             }
         }
 
-        // Duration
         Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 5.0;
         LocalDateTime arrivalTime = departureTime.plusMinutes((long) (durationHours * 60));
 
-        // Conflict Check
         if (tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime, arrivalTime))
             throw new BadRequestException("Xe bận!");
         if (tripRepository.isPersonBusy(request.getDriverId(), departureTime, arrivalTime))
@@ -250,7 +252,6 @@ public class TripService implements ITripService {
         if (subDriver != null && tripRepository.isPersonBusy(subDriver.getDriverId(), departureTime, arrivalTime))
             throw new BadRequestException("Phụ xe bận!");
 
-        // Save
         Trip trip = new Trip();
         trip.setRoute(route);
         trip.setVehicle(vehicle);
@@ -404,7 +405,6 @@ public class TripService implements ITripService {
         TripSeat seat = ticket.getSeat();
         Booking booking = ticket.getBooking();
 
-        // Get passenger info
         Passenger passenger = passengerRepository.findByTicketTicketId(ticketId)
                 .orElse(null);
 
@@ -412,15 +412,11 @@ public class TripService implements ITripService {
                 .ticketId(ticket.getTicketId())
                 .ticketCode(ticket.getTicketCode())
                 .status(ticket.getTicketStatus())
-
-                // Passenger info
                 .passengerId(passenger != null ? passenger.getPassengerId() : null)
                 .passengerName(passenger != null ? passenger.getFullName() : null)
                 .phoneNumber(passenger != null ? passenger.getPhoneNumber() : null)
                 .email(passenger != null ? passenger.getEmail() : null)
                 .idCard(null)
-
-                // Trip info
                 .tripId(trip.getTripId())
                 .routeName(trip.getRoute().getOrigin().getLocationName() + " - " +
                         trip.getRoute().getDestination().getLocationName())
@@ -428,21 +424,15 @@ public class TripService implements ITripService {
                 .arrivalTime(trip.getArrivalTime())
                 .originName(trip.getRoute().getOrigin().getLocationName())
                 .destinationName(trip.getRoute().getDestination().getLocationName())
-
-                // Seat info
                 .seatId(seat.getSeatId())
                 .seatNumber(seat.getSeatNumber())
                 .seatType(seat.getSeatType())
                 .seatStatus(seat.getStatus())
-
-                // Booking info
                 .bookingId(booking.getBookingId())
                 .bookingDate(booking.getCreatedAt())
                 .ticketPrice(ticket.getPrice().doubleValue())
                 .paymentStatus(booking.getBookingStatus())
                 .paymentMethod(booking.getBookingType())
-
-                // Vehicle info
                 .vehiclePlateNumber(trip.getVehicle().getLicensePlate())
                 .vehicleType(trip.getVehicle().getVehicleType().getTypeName())
                 .build();
@@ -451,31 +441,24 @@ public class TripService implements ITripService {
     @Override
     @Transactional
     public void completeTrip(Integer tripId, CompleteTripRequestDTO request) {
-        // Validate trip exists
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
-        // Validate driver authorization
         if (!trip.getDriver().getDriverId().equals(request.getDriverId()) &&
                 (trip.getSubDriver() == null || !trip.getSubDriver().getDriverId().equals(request.getDriverId()))) {
             throw new BadRequestException("Only the assigned driver or sub-driver can complete this trip");
         }
 
-        // Check trip status
         if (!TripStatus.RUNNING.getDisplayName().equalsIgnoreCase(trip.getStatus())) {
             throw new BadRequestException("Only running trips can be completed. Current status: " + trip.getStatus());
         }
 
-        // Update trip status
         trip.setStatus(TripStatus.COMPLETED.getDisplayName());
         if (request.getCompletionNote() != null) {
             trip.setStatusNote(request.getCompletionNote());
         }
-
-        // Set actual arrival time
         trip.setArrivalTime(LocalDateTime.now());
 
-        // Update all unchecked tickets to NO_SHOW
         List<Ticket> confirmedTickets = ticketRepository.findByTripIdAndTicketStatus(
                 tripId, TicketStatus.CONFIRMED.getDisplayName());
 
