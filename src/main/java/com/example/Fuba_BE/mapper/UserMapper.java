@@ -13,10 +13,12 @@ public interface UserMapper {
     @Mapping(source = "role.roleId", target = "roleId")
     @Mapping(source = "role.roleName", target = "roleName")
     @Mapping(source = "role.description", target = "roleDescription")
+    @Mapping(source = "avt", target = "avatarUrl")
     UserResponseDTO toResponseDTO(User user);
 
     @Mapping(source = "role.roleId", target = "roleId")
     @Mapping(source = "role.roleName", target = "roleName")
     @Mapping(source = "role.description", target = "roleDescription")
+    @Mapping(source = "avt", target = "avatarUrl")
     ProfileResponseDTO toProfileResponseDTO(User user);
 }

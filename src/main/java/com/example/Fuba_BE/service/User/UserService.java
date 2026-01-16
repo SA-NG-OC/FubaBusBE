@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.Fuba_BE.domain.entity.Role;
 import com.example.Fuba_BE.domain.entity.User;
@@ -22,6 +23,7 @@ import com.example.Fuba_BE.exception.UnauthorizedException;
 import com.example.Fuba_BE.mapper.UserMapper;
 import com.example.Fuba_BE.repository.RoleRepository;
 import com.example.Fuba_BE.repository.UserRepository;
+import com.example.Fuba_BE.service.CloudinaryService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class UserService implements IUserService {
     private final RoleRepository roleRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final CloudinaryService cloudinaryService;
 
     @Override
     public UserResponseDTO createUserByAdmin(CreateUserByAdminRequest request) {
@@ -88,7 +91,13 @@ public class UserService implements IUserService {
     public Page<UserResponseDTO> getAllUsers(Pageable pageable) {
         log.debug("🔍 Fetching all users with pagination");
         Page<User> users = userRepository.findAll(pageable);
-        return users.map(userMapper::toResponseDTO);
+        return users.map(user -> {
+            UserResponseDTO dto = userMapper.toResponseDTO(user);
+            if (dto.getAvatarUrl() == null || dto.getAvatarUrl().isEmpty()) {
+                dto.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+            }
+            return dto;
+        });
     }
 
     @Override
@@ -100,7 +109,11 @@ public class UserService implements IUserService {
                     log.error("❌ User not found with ID: {}", userId);
                     return new ResourceNotFoundException("User not found with ID: " + userId);
                 });
-        return userMapper.toResponseDTO(user);
+        UserResponseDTO response = userMapper.toResponseDTO(user);
+        if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+            response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+        }
+        return response;
     }
 
     @Override
@@ -113,7 +126,13 @@ public class UserService implements IUserService {
 
         List<User> users = userRepository.findByRoleId(roleId);
         return users.stream()
-                .map(userMapper::toResponseDTO)
+                .map(user -> {
+                    UserResponseDTO dto = userMapper.toResponseDTO(user);
+                    if (dto.getAvatarUrl() == null || dto.getAvatarUrl().isEmpty()) {
+                        dto.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+                    }
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -164,20 +183,25 @@ public class UserService implements IUserService {
     @Transactional(readOnly = true)
     public ProfileResponseDTO getMyProfile(Integer userId) {
         log.info("🔍 Fetching profile for user ID: {}", userId);
-        
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     log.error("❌ User not found with ID: {}", userId);
                     return new ResourceNotFoundException("User not found with ID: " + userId);
                 });
-        
-        return userMapper.toProfileResponseDTO(user);
+
+        ProfileResponseDTO response = userMapper.toProfileResponseDTO(user);
+        // Ensure default fallback if avatar is null or empty
+        if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+            response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+        }
+        return response;
     }
 
     @Override
     public ProfileResponseDTO updateMyProfile(Integer userId, UpdateProfileRequest request) {
         log.info("🔄 Updating profile for user ID: {}", userId);
-        
+
         try {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> {
@@ -198,8 +222,13 @@ public class UserService implements IUserService {
 
             User updatedUser = userRepository.save(user);
             log.info("✅ Profile updated successfully for user ID: {}", userId);
-            
-            return userMapper.toProfileResponseDTO(updatedUser);
+
+            ProfileResponseDTO response = userMapper.toProfileResponseDTO(updatedUser);
+            // Ensure default fallback if avatar is null or empty
+            if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+                response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+            }
+            return response;
 
         } catch (BadRequestException | ResourceNotFoundException e) {
             throw e;
@@ -212,7 +241,7 @@ public class UserService implements IUserService {
     @Override
     public void updateMyPassword(Integer userId, UpdatePasswordRequest request) {
         log.info("🔐 Updating password for user ID: {}", userId);
-        
+
         try {
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> {
@@ -235,7 +264,7 @@ public class UserService implements IUserService {
             // Update password
             user.setPassword(passwordEncoder.encode(request.getNewPassword()));
             userRepository.save(user);
-            
+
             log.info("✅ Password updated successfully for user ID: {}", userId);
 
         } catch (UnauthorizedException | BadRequestException | ResourceNotFoundException e) {
@@ -250,20 +279,25 @@ public class UserService implements IUserService {
     @Transactional(readOnly = true)
     public ProfileResponseDTO getEmployeeProfile(Integer employeeId) {
         log.info("🔍 Admin/Staff fetching employee profile for ID: {}", employeeId);
-        
+
         User employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> {
                     log.error("❌ Employee not found with ID: {}", employeeId);
                     return new ResourceNotFoundException("Employee not found with ID: " + employeeId);
                 });
-        
-        return userMapper.toProfileResponseDTO(employee);
+
+        ProfileResponseDTO response = userMapper.toProfileResponseDTO(employee);
+        // Ensure default fallback if avatar is null or empty
+        if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+            response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+        }
+        return response;
     }
 
     @Override
     public ProfileResponseDTO updateEmployeeProfile(Integer employeeId, UpdateProfileRequest request) {
         log.info("🔄 Admin/Staff updating employee profile for ID: {}", employeeId);
-        
+
         try {
             User employee = userRepository.findById(employeeId)
                     .orElseThrow(() -> {
@@ -284,8 +318,13 @@ public class UserService implements IUserService {
 
             User updatedEmployee = userRepository.save(employee);
             log.info("✅ Employee profile updated successfully for ID: {}", employeeId);
-            
-            return userMapper.toProfileResponseDTO(updatedEmployee);
+
+            ProfileResponseDTO response = userMapper.toProfileResponseDTO(updatedEmployee);
+            // Ensure default fallback if avatar is null or empty
+            if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+                response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+            }
+            return response;
 
         } catch (BadRequestException | ResourceNotFoundException e) {
             throw e;
@@ -325,5 +364,66 @@ public class UserService implements IUserService {
             log.warn("⚠️ Phone number already exists: {}", phoneNumber);
             throw new BadRequestException("Phone number already exists: " + phoneNumber);
         }
+    }
+
+    // --- Avatar Management ---
+
+    @Override
+    public ProfileResponseDTO uploadAvatar(Integer userId, MultipartFile file) {
+        log.info("📸 Uploading avatar for user ID: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+
+        try {
+            // Delete old avatar if exists (and not default)
+            if (user.getAvt() != null && !user.getAvt().isEmpty()
+                    && !user.getAvt().equals(cloudinaryService.getDefaultAvatarUrl())) {
+                log.info("🗑️ Deleting old avatar: {}", user.getAvt());
+                cloudinaryService.deleteImageByUrl(user.getAvt());
+            }
+
+            // Upload new avatar
+            String newAvatarUrl = cloudinaryService.uploadImage(file);
+            user.setAvt(newAvatarUrl);
+            userRepository.save(user);
+
+            log.info("✅ Avatar uploaded successfully for user {}: {}", userId, newAvatarUrl);
+
+            ProfileResponseDTO response = userMapper.toProfileResponseDTO(user);
+            // Ensure default fallback if null
+            if (response.getAvatarUrl() == null || response.getAvatarUrl().isEmpty()) {
+                response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+            }
+            return response;
+        } catch (Exception e) {
+            log.error("❌ Failed to upload avatar for user {}", userId, e);
+            throw new BadRequestException("Failed to upload avatar: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public ProfileResponseDTO deleteAvatar(Integer userId) {
+        log.info("🗑️ Deleting avatar for user ID: {}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+
+        // Delete from Cloudinary if not default
+        if (user.getAvt() != null && !user.getAvt().isEmpty()
+                && !user.getAvt().equals(cloudinaryService.getDefaultAvatarUrl())) {
+            log.info("🗑️ Deleting avatar from Cloudinary: {}", user.getAvt());
+            cloudinaryService.deleteImageByUrl(user.getAvt());
+        }
+
+        // Set to default avatar
+        user.setAvt(cloudinaryService.getDefaultAvatarUrl());
+        userRepository.save(user);
+
+        log.info("✅ Avatar deleted for user {}, reverted to default", userId);
+
+        ProfileResponseDTO response = userMapper.toProfileResponseDTO(user);
+        response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+        return response;
     }
 }

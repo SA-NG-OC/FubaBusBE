@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
 import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
@@ -69,4 +70,16 @@ public interface IUserService {
      * Update employee profile by ID (ADMIN/STAFF only)
      */
     ProfileResponseDTO updateEmployeeProfile(Integer employeeId, UpdateProfileRequest request);
+
+    // --- Avatar Management ---
+
+    /**
+     * Upload avatar for user
+     */
+    ProfileResponseDTO uploadAvatar(Integer userId, MultipartFile file);
+
+    /**
+     * Delete avatar for user (revert to default)
+     */
+    ProfileResponseDTO deleteAvatar(Integer userId);
 }

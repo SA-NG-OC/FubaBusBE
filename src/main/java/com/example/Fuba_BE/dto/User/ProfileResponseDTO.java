@@ -20,4 +20,5 @@ public class ProfileResponseDTO {
     private Integer roleId;
     private String roleName;
     private String roleDescription;
+    private String avatarUrl;
 }

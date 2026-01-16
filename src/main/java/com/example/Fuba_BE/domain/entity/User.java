@@ -71,6 +71,10 @@ public class User {
     @Column(name = "resettokenexpiry")
     private LocalDateTime resetTokenExpiry;
 
+    // Avatar URL
+    @Column(name = "avt")
+    private String avt;
+
     public boolean isAccountLocked() {
         return accountLockedUntil != null && LocalDateTime.now().isBefore(accountLockedUntil);
     }

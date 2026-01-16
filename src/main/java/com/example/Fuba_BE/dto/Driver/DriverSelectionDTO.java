@@ -11,4 +11,5 @@ public class DriverSelectionDTO {
     private Integer driverId;
     private String driverName; // Lấy từ User fullName
     private String driverLicense; // Kèm bằng lái để phân biệt nếu trùng tên
+    private String avatarUrl;
 }
