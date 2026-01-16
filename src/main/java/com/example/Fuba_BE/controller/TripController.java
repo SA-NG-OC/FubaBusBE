@@ -11,6 +11,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +33,7 @@ import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
 import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
 import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.security.UserPrincipal;
 import com.example.Fuba_BE.service.Trip.ITripService;
 
 import jakarta.validation.Valid;
@@ -175,5 +177,29 @@ public class TripController {
             @Valid @RequestBody CompleteTripRequestDTO request) {
         tripService.completeTrip(tripId, request);
         return ResponseEntity.ok(ApiResponse.success("Trip completed successfully", null));
+    }
+
+    /**
+     * Get trips assigned to the currently authenticated driver
+     * Automatically retrieves trips for the logged-in driver without needing to
+     * pass driverId
+     */
+    @GetMapping("/my-trips")
+    public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getMyTrips(
+            Authentication authentication,
+            @RequestParam(required = false) String status,
+            @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
+        Integer userId = extractUserId(authentication);
+        Page<Trip> tripPage = tripService.getMyTripsForDriver(userId, status, pageable);
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+        return ResponseEntity.ok(ApiResponse.success("My trips retrieved successfully", responsePage));
+    }
+
+    /**
+     * Extract user ID from authentication token
+     */
+    private Integer extractUserId(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        return userPrincipal.getUserId();
     }
 }

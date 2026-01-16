@@ -1,10 +1,13 @@
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.entity.Driver;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-import java.util.List;
+import com.example.Fuba_BE.domain.entity.Driver;
 
 public interface DriverRepository extends JpaRepository<Driver, Integer> {
     @Query("SELECT COUNT(d) FROM Driver d WHERE d.licenseExpiry >= CURRENT_DATE")
@@ -15,4 +18,7 @@ public interface DriverRepository extends JpaRepository<Driver, Integer> {
             "JOIN u.role r " +
             "WHERE r.roleName = 'DRIVER'") // Chỉ lấy role chuẩn DRIVER
     List<Driver> findAllWithUserAndRoleDriver();
+
+    @Query("SELECT d FROM Driver d JOIN FETCH d.user u WHERE u.userId = :userId")
+    Optional<Driver> findByUserId(@Param("userId") Integer userId);
 }

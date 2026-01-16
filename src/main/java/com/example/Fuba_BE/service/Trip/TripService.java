@@ -489,4 +489,18 @@ public class TripService implements ITripService {
 
         tripRepository.save(trip);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Trip> getMyTripsForDriver(Integer userId, String status, Pageable pageable) {
+        // Get driver by userId
+        Driver driver = driverRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found for this user"));
+
+        // Reuse existing method with driverId
+        return tripRepository.findTripsByDriverOrSubDriver(
+                driver.getDriverId(),
+                StringUtils.hasText(status) ? status : null,
+                pageable);
+    }
 }
