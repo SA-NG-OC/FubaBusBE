@@ -1,8 +1,17 @@
 package com.example.Fuba_BE.service.Ticket;
 
+import java.text.NumberFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.Fuba_BE.domain.entity.Passenger;
 import com.example.Fuba_BE.domain.entity.Ticket;
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.domain.enums.TicketStatus;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInRequestDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
@@ -12,15 +21,9 @@ import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.TicketMapper;
 import com.example.Fuba_BE.repository.PassengerRepository;
 import com.example.Fuba_BE.repository.TicketRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.text.NumberFormat;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -49,7 +52,8 @@ public class TicketService implements ITicketService {
         log.info("Processing check-in for ticket code: {}", request.getTicketCode());
 
         Ticket ticket = ticketRepository.findByTicketCodeWithLock(request.getTicketCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with code: " + request.getTicketCode()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Ticket not found with code: " + request.getTicketCode()));
 
         Passenger passenger = passengerRepository.findByTicket_TicketId(ticket.getTicketId())
                 .orElse(null);
@@ -70,7 +74,7 @@ public class TicketService implements ITicketService {
         validateTripDate(trip);
         validateCheckInTime(trip);
 
-        ticket.setTicketStatus("Used");
+        ticket.setTicketStatus(TicketStatus.USED.getDisplayName());
         ticketRepository.save(ticket);
 
         log.info("Ticket {} checked in successfully. Status changed from {} to Used",
@@ -83,7 +87,7 @@ public class TicketService implements ITicketService {
         return TicketCheckInResponseDTO.builder()
                 .ticketCode(ticket.getTicketCode())
                 .previousStatus(previousStatus)
-                .newStatus("Used")
+                .newStatus(TicketStatus.USED.getDisplayName())
                 .checkInTime(LocalDateTime.now())
                 .checkInMethod(request.getCheckInMethod())
                 .passengerName(passengerName)
@@ -184,8 +188,7 @@ public class TicketService implements ITicketService {
         if (!ticketTrip.getTripId().equals(requestedTripId)) {
             throw new BadRequestException(
                     String.format("Wrong trip! This ticket is for trip #%d, but you are checking in for trip #%d",
-                            ticketTrip.getTripId(), requestedTripId)
-            );
+                            ticketTrip.getTripId(), requestedTripId));
         }
     }
 
@@ -196,8 +199,7 @@ public class TicketService implements ITicketService {
         if (!trip.getVehicle().getVehicleId().equals(requestedVehicleId)) {
             throw new BadRequestException(
                     String.format("Wrong vehicle! This ticket is for vehicle %s, not the current vehicle",
-                            trip.getVehicle().getLicensePlate())
-            );
+                            trip.getVehicle().getLicensePlate()));
         }
     }
 
@@ -207,8 +209,7 @@ public class TicketService implements ITicketService {
         if (!now.toLocalDate().equals(departureTime.toLocalDate())) {
             throw new BadRequestException(
                     String.format("Wrong date! This ticket is for %s, but today is %s",
-                            departureTime.toLocalDate(), now.toLocalDate())
-            );
+                            departureTime.toLocalDate(), now.toLocalDate()));
         }
     }
 
@@ -219,7 +220,8 @@ public class TicketService implements ITicketService {
 
         LocalDateTime earliestCheckIn = departureTime.minusHours(2);
         if (now.isBefore(earliestCheckIn)) {
-            throw new BadRequestException("Check-in is not available yet. Check-in opens 2 hours before departure at " + earliestCheckIn);
+            throw new BadRequestException(
+                    "Check-in is not available yet. Check-in opens 2 hours before departure at " + earliestCheckIn);
         }
 
         if (now.isAfter(arrivalTime)) {
@@ -239,7 +241,8 @@ public class TicketService implements ITicketService {
     }
 
     private String buildRouteName(Trip trip) {
-        if (trip.getRoute() == null) return "Unknown Route";
+        if (trip.getRoute() == null)
+            return "Unknown Route";
         return trip.getRoute().getOrigin().getLocationName() + " → " +
                 trip.getRoute().getDestination().getLocationName();
     }

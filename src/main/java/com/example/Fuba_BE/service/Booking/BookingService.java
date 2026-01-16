@@ -1,6 +1,34 @@
 package com.example.Fuba_BE.service.Booking;
 
-import com.example.Fuba_BE.domain.entity.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.Fuba_BE.domain.entity.Booking;
+import com.example.Fuba_BE.domain.entity.Passenger;
+import com.example.Fuba_BE.domain.entity.Refund;
+import com.example.Fuba_BE.domain.entity.RouteStop;
+import com.example.Fuba_BE.domain.entity.Ticket;
+import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.domain.entity.TripSeat;
+import com.example.Fuba_BE.domain.entity.User;
+import com.example.Fuba_BE.domain.enums.TicketStatus;
 import com.example.Fuba_BE.dto.Booking.BookingConfirmRequest;
 import com.example.Fuba_BE.dto.Booking.BookingFilterRequest;
 import com.example.Fuba_BE.dto.Booking.BookingPageResponse;
@@ -13,23 +41,17 @@ import com.example.Fuba_BE.dto.Booking.TicketCountResponse;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.BookingMapper;
-import com.example.Fuba_BE.repository.*;
+import com.example.Fuba_BE.repository.BookingRepository;
+import com.example.Fuba_BE.repository.PassengerRepository;
+import com.example.Fuba_BE.repository.RefundRepository;
+import com.example.Fuba_BE.repository.RouteStopRepository;
+import com.example.Fuba_BE.repository.TicketRepository;
+import com.example.Fuba_BE.repository.TripRepository;
+import com.example.Fuba_BE.repository.TripSeatRepository;
+import com.example.Fuba_BE.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of IBookingService.
@@ -115,13 +137,16 @@ public class BookingService implements IBookingService {
                 .tripId(trip.getTripId())
                 .routeName(trip.getRoute() != null ? trip.getRoute().getRouteName() : null)
                 .departureLocation(trip.getRoute() != null && trip.getRoute().getOrigin() != null
-                        ? trip.getRoute().getOrigin().getLocationName() : null)
+                        ? trip.getRoute().getOrigin().getLocationName()
+                        : null)
                 .arrivalLocation(trip.getRoute() != null && trip.getRoute().getDestination() != null
-                        ? trip.getRoute().getDestination().getLocationName() : null)
+                        ? trip.getRoute().getDestination().getLocationName()
+                        : null)
                 .departureTime(trip.getDepartureTime())
                 .arrivalTime(trip.getArrivalTime())
                 .vehicleType(trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
-                        ? trip.getVehicle().getVehicleType().getTypeName() : null)
+                        ? trip.getVehicle().getVehicleType().getTypeName()
+                        : null)
                 .vehiclePlate(trip.getVehicle() != null ? trip.getVehicle().getLicensePlate() : null)
                 .build();
 
@@ -206,7 +231,7 @@ public class BookingService implements IBookingService {
                     .booking(booking)
                     .seat(seat)
                     .price(trip.getBasePrice())
-                    .ticketStatus("Unconfirmed")
+                    .ticketStatus(TicketStatus.UNCONFIRMED.getDisplayName())
                     .build();
 
             ticket = ticketRepository.save(ticket);
@@ -297,7 +322,7 @@ public class BookingService implements IBookingService {
                     .booking(booking)
                     .seat(seat)
                     .price(trip.getBasePrice())
-                    .ticketStatus("Confirmed")
+                    .ticketStatus(TicketStatus.CONFIRMED.getDisplayName())
                     .build();
 
             ticket = ticketRepository.save(ticket);
@@ -324,7 +349,8 @@ public class BookingService implements IBookingService {
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
 
         if (!"Held".equals(booking.getBookingStatus()) && !"Pending".equals(booking.getBookingStatus())) {
-            throw new BadRequestException("Booking không ở trạng thái Held hoặc Pending. Hiện tại: " + booking.getBookingStatus());
+            throw new BadRequestException(
+                    "Booking không ở trạng thái Held hoặc Pending. Hiện tại: " + booking.getBookingStatus());
         }
 
         // TODO: Integrate actual payment gateway here
@@ -334,7 +360,7 @@ public class BookingService implements IBookingService {
 
         List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
         for (Ticket ticket : tickets) {
-            ticket.setTicketStatus("Confirmed");
+            ticket.setTicketStatus(TicketStatus.CONFIRMED.getDisplayName());
             ticketRepository.save(ticket);
 
             TripSeat seat = ticket.getSeat();
@@ -394,7 +420,8 @@ public class BookingService implements IBookingService {
         if (status != null && !status.trim().isEmpty()) {
             List<String> validStatuses = Arrays.asList("Held", "Pending", "Paid", "Cancelled", "Expired", "Completed");
             if (!validStatuses.contains(status)) {
-                throw new BadRequestException("Invalid booking status. Valid values: Held, Pending, Paid, Cancelled, Expired, Completed");
+                throw new BadRequestException(
+                        "Invalid booking status. Valid values: Held, Pending, Paid, Cancelled, Expired, Completed");
             }
             bookings = bookingRepository.findByCustomerIdAndBookingStatus(customerId, status);
         } else {
@@ -468,8 +495,7 @@ public class BookingService implements IBookingService {
         if (!cancellableStatuses.contains(booking.getBookingStatus())) {
             throw new BadRequestException(
                     "Không thể hủy booking ở trạng thái: " + booking.getBookingStatus() +
-                            ". Chỉ có thể hủy booking ở trạng thái: Held, Pending, Paid"
-            );
+                            ". Chỉ có thể hủy booking ở trạng thái: Held, Pending, Paid");
         }
 
         String previousStatus = booking.getBookingStatus();
@@ -480,9 +506,9 @@ public class BookingService implements IBookingService {
 
         List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
         List<Integer> ticketIds = new ArrayList<>();
-        
+
         for (Ticket ticket : tickets) {
-            ticket.setTicketStatus("Cancelled");
+            ticket.setTicketStatus(TicketStatus.CANCELLED.getDisplayName());
             ticketRepository.save(ticket);
             ticketIds.add(ticket.getTicketId());
 
@@ -499,12 +525,12 @@ public class BookingService implements IBookingService {
             LocalDateTime departureTime = booking.getTrip().getDepartureTime();
             LocalDateTime now = LocalDateTime.now();
             long hoursUntilDeparture = java.time.Duration.between(now, departureTime).toHours();
-            
+
             BigDecimal refundAmount;
             int refundPercentage;
             String refundType;
             String refundReason;
-            
+
             if (hoursUntilDeparture >= 48) {
                 // Cancel 2+ days before → 100% refund
                 refundPercentage = 100;
@@ -526,7 +552,7 @@ public class BookingService implements IBookingService {
                 refundType = null; // No refund record needed
                 refundReason = "Khách hàng hủy vé trong vòng 12 tiếng trước khởi hành - Không hoàn tiền";
             }
-            
+
             // Only create refund record if there's money to refund
             if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
                 Refund refund = Refund.builder()
@@ -539,11 +565,11 @@ public class BookingService implements IBookingService {
                         .refundMethod(Refund.METHOD_TRANSFER) // Default: Transfer
                         .build();
                 refundRepository.save(refund);
-                
-                log.info("Created refund for booking {}. Amount: {} ({}% of {})", 
+
+                log.info("Created refund for booking {}. Amount: {} ({}% of {})",
                         booking.getBookingCode(), refundAmount, refundPercentage, booking.getTotalAmount());
             } else {
-                log.info("No refund for booking {} - cancelled less than 12 hours before departure", 
+                log.info("No refund for booking {} - cancelled less than 12 hours before departure",
                         booking.getBookingCode());
             }
         }
@@ -556,12 +582,13 @@ public class BookingService implements IBookingService {
     @Override
     @Transactional
     public RescheduleResponse rescheduleBooking(RescheduleRequest request) {
-        log.info("Rescheduling booking {} to trip {} by user {}", 
+        log.info("Rescheduling booking {} to trip {} by user {}",
                 request.getOldBookingId(), request.getNewTripId(), request.getUserId());
 
         // 1. Validate old booking
         Booking oldBooking = bookingRepository.findByIdWithLock(request.getOldBookingId())
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + request.getOldBookingId()));
+                .orElseThrow(
+                        () -> new NotFoundException("Không tìm thấy booking với ID: " + request.getOldBookingId()));
 
         // Check ownership
         if (oldBooking.getCustomer() != null) {
@@ -577,21 +604,23 @@ public class BookingService implements IBookingService {
 
         // Check status - only Paid bookings can be rescheduled
         if (!"Paid".equals(oldBooking.getBookingStatus())) {
-            throw new BadRequestException("Chỉ có thể đổi vé đã thanh toán. Trạng thái hiện tại: " + oldBooking.getBookingStatus());
+            throw new BadRequestException(
+                    "Chỉ có thể đổi vé đã thanh toán. Trạng thái hiện tại: " + oldBooking.getBookingStatus());
         }
 
         // Check reschedule time - must be at least 12 hours before departure
         LocalDateTime oldDepartureTime = oldBooking.getTrip().getDepartureTime();
         LocalDateTime now = LocalDateTime.now();
         long hoursUntilDeparture = java.time.Duration.between(now, oldDepartureTime).toHours();
-        
+
         if (hoursUntilDeparture < 12) {
             throw new BadRequestException("Không thể đổi vé trong vòng 12 tiếng trước giờ khởi hành");
         }
 
         // 2. Validate new trip
         Trip newTrip = tripRepository.findById(request.getNewTripId())
-                .orElseThrow(() -> new NotFoundException("Không tìm thấy chuyến đi mới với ID: " + request.getNewTripId()));
+                .orElseThrow(
+                        () -> new NotFoundException("Không tìm thấy chuyến đi mới với ID: " + request.getNewTripId()));
 
         // Check new trip is not the same as old trip
         if (newTrip.getTripId().equals(oldBooking.getTrip().getTripId())) {
@@ -613,7 +642,7 @@ public class BookingService implements IBookingService {
         for (Integer seatId : request.getNewSeatIds()) {
             TripSeat seat = tripSeatRepository.findBySeatIdAndTripId(seatId, request.getNewTripId())
                     .orElseThrow(() -> new NotFoundException("Không tìm thấy ghế " + seatId + " trong chuyến đi mới"));
-            
+
             // Seat must be locked by this user or available
             if (seat.isBooked()) {
                 throw new BadRequestException("Ghế " + seat.getSeatNumber() + " đã được đặt");
@@ -648,9 +677,9 @@ public class BookingService implements IBookingService {
         // 5. Cancel old booking (release seats)
         List<Ticket> oldTickets = ticketRepository.findByBookingId(oldBooking.getBookingId());
         List<Integer> oldTicketIds = new ArrayList<>();
-        
+
         for (Ticket ticket : oldTickets) {
-            ticket.setTicketStatus("Rescheduled");
+            ticket.setTicketStatus(TicketStatus.RESCHEDULED.getDisplayName());
             ticketRepository.save(ticket);
             oldTicketIds.add(ticket.getTicketId());
 
@@ -667,7 +696,7 @@ public class BookingService implements IBookingService {
 
         // 6. Create new booking
         String newBookingCode = generateBookingCode();
-        
+
         Booking newBooking = Booking.builder()
                 .bookingCode(newBookingCode)
                 .customer(oldBooking.getCustomer())
@@ -682,22 +711,22 @@ public class BookingService implements IBookingService {
                 .guestSessionId(oldBooking.getGuestSessionId())
                 .holdExpiry(null) // No hold for rescheduled booking
                 .build();
-        
+
         newBooking = bookingRepository.save(newBooking);
 
         // 7. Create new tickets
         List<Ticket> newTickets = new ArrayList<>();
         int passengerIndex = 0;
-        
+
         for (TripSeat newSeat : newSeats) {
             String ticketCode = generateTicketCode();
-            
+
             Ticket newTicket = Ticket.builder()
                     .ticketCode(ticketCode)
                     .booking(newBooking)
                     .seat(newSeat)
                     .price(newTrip.getBasePrice())
-                    .ticketStatus("Booked")
+                    .ticketStatus(TicketStatus.CONFIRMED.getDisplayName())
                     .build();
             newTicket = ticketRepository.save(newTicket);
             newTickets.add(newTicket);
@@ -750,12 +779,13 @@ public class BookingService implements IBookingService {
                     .build();
             refund = refundRepository.save(refund);
             refundId = refund.getRefundId();
-            
+
             log.info("Created refund {} for reschedule. Amount: {}", refundId, refundAmount);
         }
 
         // 9. Build response
-        BookingResponse oldBookingResponse = bookingMapper.toBookingResponse(oldBooking, oldBooking.getTrip(), oldTickets);
+        BookingResponse oldBookingResponse = bookingMapper.toBookingResponse(oldBooking, oldBooking.getTrip(),
+                oldTickets);
         BookingResponse newBookingResponse = bookingMapper.toBookingResponse(newBooking, newTrip, newTickets);
 
         RescheduleResponse.FinancialSummary financialSummary = RescheduleResponse.FinancialSummary.builder()
@@ -769,13 +799,13 @@ public class BookingService implements IBookingService {
                 .description(financialDescription)
                 .build();
 
-        String message = refundAmount.compareTo(BigDecimal.ZERO) > 0 
+        String message = refundAmount.compareTo(BigDecimal.ZERO) > 0
                 ? String.format("Đổi vé thành công! Hoàn tiền: %s VNĐ", refundAmount)
-                : extraFee.compareTo(BigDecimal.ZERO) > 0 
+                : extraFee.compareTo(BigDecimal.ZERO) > 0
                         ? String.format("Đổi vé thành công! Phụ thu: %s VNĐ", extraFee)
                         : "Đổi vé thành công!";
 
-        log.info("Reschedule completed: {} -> {}. Price diff: {}", 
+        log.info("Reschedule completed: {} -> {}. Price diff: {}",
                 oldBooking.getBookingCode(), newBooking.getBookingCode(), priceDifference);
 
         return RescheduleResponse.builder()
@@ -790,17 +820,24 @@ public class BookingService implements IBookingService {
     // ==================== Private Helper Methods ====================
 
     private boolean validateSeatForBooking(TripSeat seat, String userId) {
-        if (!seat.isLocked()) return false;
-        if (seat.isLockExpired()) return false;
+        if (!seat.isLocked())
+            return false;
+        if (seat.isLockExpired())
+            return false;
         return userId.equals(seat.getLockedBy());
     }
 
     private String getValidationMessage(TripSeat seat, String userId) {
-        if (seat.isBooked()) return "Ghế đã được đặt";
-        if (seat.isAvailable()) return "Ghế chưa được khóa. Vui lòng khóa ghế trước khi đặt";
-        if (!seat.isLocked()) return "Trạng thái ghế không hợp lệ: " + seat.getStatus();
-        if (seat.isLockExpired()) return "Thời gian khóa ghế đã hết hạn";
-        if (!userId.equals(seat.getLockedBy())) return "Ghế đang được giữ bởi người dùng khác";
+        if (seat.isBooked())
+            return "Ghế đã được đặt";
+        if (seat.isAvailable())
+            return "Ghế chưa được khóa. Vui lòng khóa ghế trước khi đặt";
+        if (!seat.isLocked())
+            return "Trạng thái ghế không hợp lệ: " + seat.getStatus();
+        if (seat.isLockExpired())
+            return "Thời gian khóa ghế đã hết hạn";
+        if (!userId.equals(seat.getLockedBy()))
+            return "Ghế đang được giữ bởi người dùng khác";
         return "Ghế hợp lệ để đặt";
     }
 
@@ -812,13 +849,16 @@ public class BookingService implements IBookingService {
             throw new BadRequestException("Ghế " + seatNumber + " (ID: " + seatId + ") đã được đặt");
         }
         if (!seat.isLocked()) {
-            throw new BadRequestException("Ghế " + seatNumber + " (ID: " + seatId + ") chưa được khóa. Vui lòng khóa ghế trước khi đặt");
+            throw new BadRequestException(
+                    "Ghế " + seatNumber + " (ID: " + seatId + ") chưa được khóa. Vui lòng khóa ghế trước khi đặt");
         }
         if (seat.isLockExpired()) {
-            throw new BadRequestException("Thời gian khóa ghế " + seatNumber + " (ID: " + seatId + ") đã hết hạn. Vui lòng khóa lại");
+            throw new BadRequestException(
+                    "Thời gian khóa ghế " + seatNumber + " (ID: " + seatId + ") đã hết hạn. Vui lòng khóa lại");
         }
         if (!userId.equals(seat.getLockedBy())) {
-            throw new BadRequestException("Ghế " + seatNumber + " (ID: " + seatId + ") đang được giữ bởi người dùng khác");
+            throw new BadRequestException(
+                    "Ghế " + seatNumber + " (ID: " + seatId + ") đang được giữ bởi người dùng khác");
         }
     }
 
@@ -920,25 +960,22 @@ public class BookingService implements IBookingService {
 
         // Build sort
         Sort sort = Sort.by(
-            "DESC".equalsIgnoreCase(filterRequest.getSortDirection()) 
-                ? Sort.Direction.DESC 
-                : Sort.Direction.ASC,
-            filterRequest.getSortBy()
-        );
+                "DESC".equalsIgnoreCase(filterRequest.getSortDirection())
+                        ? Sort.Direction.DESC
+                        : Sort.Direction.ASC,
+                filterRequest.getSortBy());
 
         // Build pageable
         Pageable pageable = PageRequest.of(
-            filterRequest.getPage(),
-            filterRequest.getSize(),
-            sort
-        );
+                filterRequest.getPage(),
+                filterRequest.getSize(),
+                sort);
 
         // Query with filters
         Page<Booking> bookingPage = bookingRepository.findAllWithFilters(
-            filterRequest.getStatus(),
-            filterRequest.getSearch(),
-            pageable
-        );
+                filterRequest.getStatus(),
+                filterRequest.getSearch(),
+                pageable);
 
         // Map to response
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
@@ -970,9 +1007,8 @@ public class BookingService implements IBookingService {
         // Validate current status
         if (!"Pending".equals(booking.getBookingStatus()) && !"Held".equals(booking.getBookingStatus())) {
             throw new BadRequestException(
-                "Chỉ có thể xác nhận booking ở trạng thái Pending hoặc Held. Trạng thái hiện tại: " 
-                + booking.getBookingStatus()
-            );
+                    "Chỉ có thể xác nhận booking ở trạng thái Pending hoặc Held. Trạng thái hiện tại: "
+                            + booking.getBookingStatus());
         }
 
         // Update status
@@ -989,16 +1025,15 @@ public class BookingService implements IBookingService {
         // Update seats to Booked status
         for (Ticket ticket : tickets) {
             TripSeat tripSeat = tripSeatRepository.findBySeatIdAndTripId(
-                ticket.getSeat().getSeatId(),
-                booking.getTrip().getTripId()
-            ).orElse(null);
+                    ticket.getSeat().getSeatId(),
+                    booking.getTrip().getTripId()).orElse(null);
 
             if (tripSeat != null) {
                 tripSeat.setStatus("Booked");
                 tripSeat.setLockedBy(null);
                 tripSeat.setHoldExpiry(null);
                 tripSeatRepository.save(tripSeat);
-                
+
                 // Broadcast update
                 broadcastSeatUpdate(booking.getTrip().getTripId(), tripSeat);
             }
@@ -1021,12 +1056,13 @@ public class BookingService implements IBookingService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "trip.departureTime"));
 
         Page<Booking> bookingPage;
-        
+
         if (status == null || status.trim().isEmpty()) {
             // Get all bookings
             bookingPage = bookingRepository.findByCustomer(user, pageable);
         } else if ("Upcoming".equalsIgnoreCase(status)) {
-            // Upcoming = Held + Paid (not completed, not cancelled, departure time in future)
+            // Upcoming = Held + Paid (not completed, not cancelled, departure time in
+            // future)
             LocalDateTime now = LocalDateTime.now();
             bookingPage = bookingRepository.findByCustomerAndBookingStatusInAndTripDepartureTimeAfter(
                     user, Arrays.asList("Held", "Paid"), now, pageable);

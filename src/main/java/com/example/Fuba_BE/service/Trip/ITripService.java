@@ -1,15 +1,18 @@
 package com.example.Fuba_BE.service.Trip;
 
-import com.example.Fuba_BE.domain.entity.Trip;
-import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
-import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
-import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
-import java.util.List;
+import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.dto.Trip.CompleteTripRequestDTO;
+import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
+import com.example.Fuba_BE.dto.Trip.TicketDetailResponseDTO;
+import com.example.Fuba_BE.dto.Trip.TripCreateRequestDTO;
+import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
+import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
 
 public interface ITripService {
     List<LocalDate> getDaysWithTrips(LocalDate startDate, LocalDate endDate);
@@ -33,8 +36,13 @@ public interface ITripService {
     Trip updateTrip(Integer tripId, TripUpdateRequestDTO request);
 
     Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-                                              String search, Integer originId, Integer destId,
-                                              Double minPrice, Double maxPrice, LocalDate date,
-                                              List<String> timeRanges, List<String> vehicleTypes,
-                                              Integer minAvailableSeats);
+            String search, Integer originId, Integer destId,
+            Double minPrice, Double maxPrice, LocalDate date,
+            List<String> timeRanges, List<String> vehicleTypes,
+            Integer minAvailableSeats);
+
+    // Driver-specific endpoints
+    TicketDetailResponseDTO getTicketDetail(Integer ticketId);
+
+    void completeTrip(Integer tripId, CompleteTripRequestDTO request);
 }
