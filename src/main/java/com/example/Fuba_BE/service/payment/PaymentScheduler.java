@@ -57,6 +57,11 @@ public class PaymentScheduler {
             int errors = 0;
             
             for (Booking booking : pendingBookings) {
+                 // 🚨 CRITICAL: NEVER touch PAID bookings
+    if ("Paid".equals(booking.getBookingStatus())) {
+        log.debug("⏭️ Skip booking {} – already Paid", booking.getBookingCode());
+        continue;
+    }
                 try {
                     // Skip if booking is about to expire (will be handled by expireHeldBookings)
                     if (booking.getHoldExpiry() != null && 

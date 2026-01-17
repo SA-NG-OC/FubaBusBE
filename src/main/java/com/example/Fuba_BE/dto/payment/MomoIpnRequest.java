@@ -27,4 +27,8 @@ public class MomoIpnRequest {
     private Long responseTime;
     private String extraData;
     private String signature;
+    
+    // Flag to skip signature check (for backend-initiated IPN)
+    @Builder.Default
+    private boolean skipSignatureCheck = false;
 }
