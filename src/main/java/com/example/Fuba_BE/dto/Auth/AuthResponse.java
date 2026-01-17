@@ -17,6 +17,7 @@ public class AuthResponse {
     private Integer userId;
     private String email;
     private String fullName;
+    private String avt; // Avatar URL
     private String role;
     private String refreshToken;
 }
