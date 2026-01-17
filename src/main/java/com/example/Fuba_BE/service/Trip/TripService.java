@@ -70,10 +70,10 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-                                                     String search, Integer originId, Integer destId,
-                                                     Double minPrice, Double maxPrice, LocalDate date,
-                                                     List<String> timeRanges, List<String> vehicleTypes,
-                                                     Integer minAvailableSeats) {
+            String search, Integer originId, Integer destId,
+            Double minPrice, Double maxPrice, LocalDate date,
+            List<String> timeRanges, List<String> vehicleTypes,
+            Integer minAvailableSeats) {
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
@@ -113,7 +113,8 @@ public class TripService implements ITripService {
                 List<Predicate> timePredicates = new ArrayList<>();
 
                 // Fix: Dùng date_part thay vì function("hour")
-                Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"), root.get("departureTime"));
+                Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"),
+                        root.get("departureTime"));
                 Expression<Integer> hourExp = hourDouble.as(Integer.class);
 
                 for (String range : timeRanges) {
@@ -149,8 +150,7 @@ public class TripService implements ITripService {
                 sub.select(cb.count(subRoot));
                 sub.where(
                         cb.equal(subRoot.get("trip"), root),
-                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName())
-                );
+                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName()));
                 predicates.add(cb.greaterThanOrEqualTo(sub, minAvailableSeats.longValue()));
             }
 
@@ -176,7 +176,7 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId,
-                                        Pageable pageable) {
+            Pageable pageable) {
         String filterStatus = StringUtils.hasText(status) ? status : null;
         LocalDateTime start = null;
         LocalDateTime end = null;
@@ -485,5 +485,18 @@ public class TripService implements ITripService {
                 driver.getDriverId(),
                 StringUtils.hasText(status) ? status : null,
                 pageable);
+    }
+
+    public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
+        Trip trip = tripRepository.findById(tripId)
+                .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
+
+        TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(trip);
+
+        if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+            responseDTO.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+        }
+
+        return this.enrichTripStats(responseDTO, tripId);
     }
 }

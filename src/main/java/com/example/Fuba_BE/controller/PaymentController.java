@@ -1,9 +1,11 @@
 package com.example.Fuba_BE.controller;
 
+import com.example.Fuba_BE.domain.entity.Booking;
 import com.example.Fuba_BE.dto.payment.MomoIpnRequest;
 import com.example.Fuba_BE.dto.payment.MomoPaymentResponse;
 import com.example.Fuba_BE.dto.payment.PaymentResponse;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.repository.BookingRepository;
 import com.example.Fuba_BE.service.payment.MomoPaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +31,7 @@ import java.util.Map;
 public class PaymentController {
 
     private final MomoPaymentService momoPaymentService;
+    private final BookingRepository bookingRepository;
 
     /**
      * Create MoMo payment for a booking
@@ -132,7 +135,7 @@ public class PaymentController {
             @RequestParam(required = false) String message,
             @RequestParam(required = false) Long transId) {
         
-        log.info("MoMo redirect: orderId={}, resultCode={}, transId={}", orderId, resultCode, transId);
+        log.info("🔄 MoMo redirect: orderId={}, resultCode={}, transId={}", orderId, resultCode, transId);
         
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
@@ -140,6 +143,46 @@ public class PaymentController {
         data.put("resultCode", resultCode);
         data.put("transId", transId);
         data.put("message", message);
+        
+        // Check booking status and sync if needed
+        String bookingStatus = "Unknown";
+        try {
+            Booking booking = bookingRepository.findByBookingCode(orderId).orElse(null);
+            if (booking != null) {
+                bookingStatus = booking.getBookingStatus();
+                data.put("bookingStatus", bookingStatus);
+                
+                // If payment successful but booking still Pending, IPN might not have arrived yet
+                if (resultCode == 0 && "Pending".equals(bookingStatus)) {
+                    log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", orderId);
+                    data.put("note", "Payment confirmed. Booking update in progress.");
+                    
+                    // Optional: Query MoMo status to force sync (if requestId is available)
+                    if (requestId != null && !requestId.isEmpty()) {
+                        try {
+                            log.info("🔍 Querying MoMo status for orderId={}, requestId={}", orderId, requestId);
+                            MomoPaymentResponse momoStatus = momoPaymentService.queryPaymentStatus(orderId, requestId);
+                            data.put("momoStatus", momoStatus);
+                            
+                            if (momoStatus.getResultCode() == 0) {
+                                log.info("✅ MoMo confirms payment successful. Backend will process via IPN.");
+                            }
+                        } catch (Exception e) {
+                            log.error("❌ Error querying MoMo status: {}", e.getMessage());
+                        }
+                    }
+                } else if (resultCode == 0 && "Paid".equals(bookingStatus)) {
+                    log.info("✅ Booking {} already marked as Paid", orderId);
+                    data.put("note", "Payment completed successfully.");
+                }
+            } else {
+                log.error("❌ Booking not found: {}", orderId);
+                data.put("bookingStatus", "NotFound");
+            }
+        } catch (Exception e) {
+            log.error("❌ Error checking booking status: {}", e.getMessage());
+            data.put("bookingStatus", "Error");
+        }
         
         boolean success = (resultCode == 0);
         String responseMessage = success 
@@ -186,5 +229,68 @@ public class PaymentController {
                 .message(status.getMessage())
                 .data(status)
                 .build());
+    }
+
+    /**
+     * Get booking payment status by order ID
+     * Frontend can call this to check if payment has been processed
+     */
+    @GetMapping("/booking-status/{orderId}")
+    @Operation(
+            summary = "Get booking payment status",
+            description = "Check the current payment status of a booking by order ID (booking code)"
+    )
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getBookingPaymentStatus(
+            @Parameter(description = "Order ID (Booking code)", required = true)
+            @PathVariable String orderId) {
+        
+        log.info("📊 Checking payment status for orderId: {}", orderId);
+        
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            Booking booking = bookingRepository.findByBookingCode(orderId)
+                    .orElseThrow(() -> new RuntimeException("Booking not found: " + orderId));
+            
+            data.put("orderId", orderId);
+            data.put("bookingStatus", booking.getBookingStatus());
+            data.put("totalAmount", booking.getTotalAmount());
+            data.put("isPaid", "Paid".equals(booking.getBookingStatus()));
+            
+            String statusMessage;
+            switch (booking.getBookingStatus()) {
+                case "Paid":
+                    statusMessage = "Thanh toán thành công. Vé đã được xác nhận.";
+                    break;
+                case "Pending":
+                    statusMessage = "Đang chờ xử lý thanh toán...";
+                    break;
+                case "PaymentFailed":
+                    statusMessage = "Thanh toán thất bại.";
+                    break;
+                case "Held":
+                    statusMessage = "Đang giữ chỗ. Chưa thanh toán.";
+                    break;
+                case "Expired":
+                    statusMessage = "Đơn hàng đã hết hạn.";
+                    break;
+                default:
+                    statusMessage = "Trạng thái: " + booking.getBookingStatus();
+            }
+            
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                    .success(true)
+                    .message(statusMessage)
+                    .data(data)
+                    .build());
+            
+        } catch (Exception e) {
+            log.error("❌ Error getting booking status: {}", e.getMessage());
+            return ResponseEntity.ok(ApiResponse.<Map<String, Object>>builder()
+                    .success(false)
+                    .message("Không tìm thấy đơn hàng")
+                    .data(data)
+                    .build());
+        }
     }
 }

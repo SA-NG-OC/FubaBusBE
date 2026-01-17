@@ -47,4 +47,6 @@ public interface ITripService {
     void completeTrip(Integer tripId, CompleteTripRequestDTO request);
 
     Page<Trip> getMyTripsForDriver(Integer userId, String status, Pageable pageable);
+
+    TripDetailedResponseDTO getTripDetailById(Integer tripId);
 }

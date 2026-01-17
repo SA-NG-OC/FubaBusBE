@@ -27,4 +27,9 @@ public class TripDetailedResponseDTO {
     private int totalSeats;      // Tổng ghế (Capacity)
     private int bookedSeats;     // Đã đặt (Sold/Booked)
     private int checkedInSeats;  // Đã lên xe (Checked-in)
+    private String originName;      // Ví dụ: "Hồ Chí Minh"
+    private String destinationName; // Ví dụ: "Đà Lạt"
+
+    private String vehicleTypeName; // Ví dụ: "Giường nằm 34 phòng" (để hiển thị Badge)
+    private String licensePlate;    // Ví dụ: "51B-123.45"
 }
