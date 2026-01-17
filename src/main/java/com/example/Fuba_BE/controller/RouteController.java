@@ -43,9 +43,9 @@ public class RouteController {
             
             @PageableDefault(
                     page = 0,
-                    size = 10,
+                    size = 20,
                     sort = "createdAt",
-                    direction = Sort.Direction.DESC
+                    direction = Sort.Direction.ASC
             ) Pageable pageable
     ) {
         Page<RouteResponseDTO> result;
@@ -65,8 +65,8 @@ public class RouteController {
         return ResponseEntity.ok(ApiResponse.success("Route selection list retrieved", routes));
     }
 
-        @PostMapping
-        @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> createRoute(
             @Valid @RequestBody RouteRequestDTO request
     ) {
@@ -75,19 +75,18 @@ public class RouteController {
                 .body(ApiResponse.success("Route created successfully", response));
     }
 
-        @PutMapping("/{id}")
-        @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> updateRoute(
             @PathVariable Integer id,
-            
             @Valid @RequestBody RouteRequestDTO request
     ) {
         RouteResponseDTO response = routeService.updateRoute(id, request);
         return ResponseEntity.ok(ApiResponse.success("Route updated successfully", response));
     }
 
-        @DeleteMapping("/{id}")
-        @PreAuthorize("hasRole('ADMIN')")
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteRoute(
             @PathVariable Integer id
     ) {

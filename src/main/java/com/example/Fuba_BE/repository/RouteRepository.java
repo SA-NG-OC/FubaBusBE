@@ -1,7 +1,9 @@
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.entity.Route;
-import com.example.Fuba_BE.dto.AdminReport.RouteAnalyticsRes;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,8 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import com.example.Fuba_BE.domain.entity.Location;
+import com.example.Fuba_BE.domain.entity.Route;
 
 @Repository
 public interface RouteRepository extends JpaRepository<Route, Integer> {
@@ -53,6 +55,9 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
 
     List<Route> findByStatus(String status);
 
+    // Check if route with same origin and destination exists
+    boolean existsByOriginAndDestination(Location origin, Location destination);
+
     @Query(value = """
            SELECT 
                r.routeid, 
@@ -71,4 +76,21 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
     Page<Object[]> findRoutesWithAnalytics(@Param("start") LocalDateTime start,
                                            @Param("end") LocalDateTime end,
                                            Pageable pageable);
+
+    // =========================================================================
+    // TRIP GENERATION - REVERSE ROUTE LOOKUP
+    // =========================================================================
+
+    /**
+     * Find reverse route (for round-trip generation)
+     * Example: If route is HN → DN, find DN → HN
+     */
+    @Query("SELECT r FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
+    Optional<Route> findByOriginAndDestination(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
+
+    /**
+     * Check if reverse route exists
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
+    boolean existsReverseRoute(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
 }

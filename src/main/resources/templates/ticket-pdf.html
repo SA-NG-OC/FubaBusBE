@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        @page {
+            size: 80mm 200mm;
+            margin: 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #ffffff;
+            color: #1F2937;
+            font-size: 12px;
+        }
+        .container {
+            width: 100%;
+        }
+        /* Header */
+        .header {
+            background-color: #FEF2F2;
+            color: #E74C3C;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            border: 1px solid #FECACA;
+        }
+        /* QR Code */
+        .qr-section {
+            text-align: center;
+            margin: 15px 0;
+            border-bottom: 2px dashed #E5E7EB;
+            padding-bottom: 15px;
+        }
+        .qr-code img {
+            width: 140px;
+            height: 140px;
+        }
+        .code-text {
+            font-weight: bold;
+            margin-top: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #1F2937;
+            margin-top: 15px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        /* Tables for Layout */
+        table { width: 100%; border-collapse: collapse; }
+        td { vertical-align: top; padding-bottom: 8px; }
+
+        .label { color: #6B7280; font-size: 10px; }
+        .value { color: #1F2937; font-weight: bold; font-size: 11px; text-align: right; }
+        .highlight { color: #E74C3C; font-size: 14px; font-weight: bold; }
+
+        /* Timeline fake bằng table */
+        .timeline-time { width: 40px; font-weight: bold; color: #E74C3C; font-size: 12px; }
+        .timeline-dot { width: 15px; text-align: center; color: #E5E7EB; font-weight: bold; }
+        .timeline-content { font-size: 11px; font-weight: bold; }
+
+        .footer {
+            text-align: center;
+            font-size: 9px;
+            color: #999;
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        VÉ ĐIỆN TỬ FUBA BUS
+        <br/>
+        <span style="font-size: 10px; color: #E74C3C; font-weight: normal;" th:text="${ticket.status}">ĐÃ XÁC NHẬN</span>
+    </div>
+
+    <div class="qr-section">
+        <div class="qr-code">
+            <img th:src="'data:image/png;base64,' + ${ticket.qrCodeBase64}" />
+        </div>
+        <div class="code-text" th:text="${ticket.ticketCode}">TK-2024-001</div>
+    </div>
+
+    <div class="section-title">🚌 THÔNG TIN CHUYẾN</div>
+    <table>
+        <tr>
+            <td class="timeline-time" th:text="${ticket.pickupTime}">09:00</td>
+            <td class="timeline-dot">●</td>
+            <td class="timeline-content" th:text="${ticket.pickupLocation}">BX Miền Đông</td>
+        </tr>
+        <tr>
+            <td class="timeline-time"></td>
+            <td class="timeline-dot">|</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td class="timeline-time" th:text="${ticket.dropoffTime}">14:00</td>
+            <td class="timeline-dot">●</td>
+            <td class="timeline-content" th:text="${ticket.dropoffLocation}">BX Đà Lạt</td>
+        </tr>
+    </table>
+
+    <table style="margin-top: 10px;">
+        <tr>
+            <td class="label">Ngày đi</td>
+            <td class="value" th:text="${ticket.departureDate}">20/11/2024</td>
+        </tr>
+        <tr>
+            <td class="label">Loại xe</td>
+            <td class="value" th:text="${ticket.vehicleType}">Limousine</td>
+        </tr>
+        <tr>
+            <td class="label">Biển số</td>
+            <td class="value" th:text="${ticket.licensePlate}">51B-12345</td>
+        </tr>
+        <tr>
+            <td class="label">Tài xế</td>
+            <td class="value" th:text="${ticket.driverName}">Nguyen Van A</td>
+        </tr>
+    </table>
+
+    <div class="section-title">👤 HÀNH KHÁCH</div>
+    <table>
+        <tr>
+            <td class="label">Họ tên</td>
+            <td class="value" th:text="${ticket.passengerName}">Tran Van B</td>
+        </tr>
+        <tr>
+            <td class="label">SĐT</td>
+            <td class="value" th:text="${ticket.passengerPhone}">0909000111</td>
+        </tr>
+        <tr>
+            <td class="label">Email</td>
+            <td class="value" th:text="${ticket.passengerEmail}">abc@gmail.com</td>
+        </tr>
+    </table>
+
+    <div class="section-title">💺 VỊ TRÍ &amp; THANH TOÁN</div>
+
+    <table>
+        <tr>
+            <td class="label">Số ghế</td>
+            <td class="value highlight" th:text="${ticket.seatNumber}">A01</td>
+        </tr>
+        <tr>
+            <td class="label">Vị trí</td>
+            <td class="value" th:text="${ticket.seatFloor}">Tầng dưới</td>
+        </tr>
+        <tr>
+            <td class="label" style="padding-top: 5px;">TỔNG TIỀN</td>
+            <td class="value highlight" style="padding-top: 5px;" th:text="${ticket.totalPrice}">250.000 đ</td>
+        </tr>
+    </table>
+
+    <div class="footer">
+        Cảm ơn quý khách đã sử dụng dịch vụ Fuba Bus!<br/>
+        Vui lòng đến trước giờ khởi hành 15 phút.
+    </div>
+</div>
+</body>
+</html>

@@ -1,12 +1,22 @@
 package com.example.Fuba_BE.domain.entity;
 
-import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tickets")
@@ -37,7 +47,7 @@ public class Ticket {
 
     @Column(name = "ticketstatus")
     @Builder.Default
-    private String ticketStatus = "Unconfirmed";
+    private String ticketStatus = "Unconfirmed"; // Use TicketStatus.UNCONFIRMED.getDisplayName() in service layer
 
     @Column(name = "requirespassengerinfo")
     @Builder.Default

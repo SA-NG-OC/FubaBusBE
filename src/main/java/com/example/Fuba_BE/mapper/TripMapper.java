@@ -18,6 +18,14 @@ public interface TripMapper {
     @Mapping(target = "arrivalTime", expression = "java(trip.getArrivalTime().toLocalTime())")
     @Mapping(source = "basePrice", target = "price")
     @Mapping(source = "status", target = "status")
+    // [NEW] Map điểm đi, điểm đến
+    @Mapping(source = "route.origin.locationName", target = "originName")
+    @Mapping(source = "route.destination.locationName", target = "destinationName")
+
+    // [NEW] Map thông tin xe
+    @Mapping(source = "vehicle.vehicleType.typeName", target = "vehicleTypeName")
+    @Mapping(source = "vehicle.vehicleType.totalSeats", target = "totalSeats")
+    @Mapping(source = "vehicle.licensePlate", target = "licensePlate")
     TripDetailedResponseDTO toDetailedDTO(Trip trip);
 
     // Helper: Format tên tuyến (Origin -> Destination)

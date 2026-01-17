@@ -145,6 +145,19 @@ public class BookingController {
                 .build());
     }
 
+    @GetMapping("/ticket/{ticketCode}")
+    @Operation(summary = "Get booking by ticket code", 
+               description = "Retrieve booking information using ticket code (e.g., TK20260106002)")
+    public ResponseEntity<ApiResponse<BookingResponse>> getBookingByTicketCode(
+            @PathVariable String ticketCode) {
+
+        return ResponseEntity.ok(ApiResponse.<BookingResponse>builder()
+                .success(true)
+                .message("Lấy thông tin booking thành công")
+                .data(bookingService.getBookingByTicketCode(ticketCode))
+                .build());
+    }
+
     @GetMapping("/customer/{customerId}")
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByCustomerId(
             @Parameter(description = "Customer ID")
@@ -180,6 +193,17 @@ public class BookingController {
                 .success(true)
                 .message("Lấy danh sách booking thành công")
                 .data(bookingService.getBookingsByPhone(phone))
+                .build());
+    }
+
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<List<BookingResponse>>> getBookingsByEmail(
+            @PathVariable String email) {
+
+        return ResponseEntity.ok(ApiResponse.<List<BookingResponse>>builder()
+                .success(true)
+                .message("Lấy danh sách booking thành công")
+                .data(bookingService.getBookingsByEmail(email))
                 .build());
     }
 

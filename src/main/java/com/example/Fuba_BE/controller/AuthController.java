@@ -1,10 +1,13 @@
 package com.example.Fuba_BE.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.view.RedirectView;
 
 import com.example.Fuba_BE.dto.Auth.AuthResponse;
 import com.example.Fuba_BE.dto.Auth.ForgotPasswordRequest;
@@ -45,6 +48,21 @@ public class AuthController {
         log.info("Forgot password request received for: {}", request.getEmailOrPhone());
         ApiResponse<String> response = authService.forgotPassword(request);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/reset-password")
+    public RedirectView getResetPasswordPage(@RequestParam String token) {
+        log.info("Reset password page accessed with token");
+        try {
+            // Validate token exists and not expired
+            authService.validateResetToken(token);
+            // Redirect to frontend with token
+            return new RedirectView("http://localhost:3000/auth/reset-password?token=" + token);
+        } catch (Exception e) {
+            log.error("Invalid token: {}", e.getMessage());
+            // Redirect to frontend with error
+            return new RedirectView("http://localhost:3000/auth/reset-password?error=invalid_token");
+        }
     }
 
     @PostMapping("/reset-password")

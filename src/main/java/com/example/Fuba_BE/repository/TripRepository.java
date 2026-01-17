@@ -1,21 +1,23 @@
 package com.example.Fuba_BE.repository;
 
-import com.example.Fuba_BE.domain.entity.Trip;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import com.example.Fuba_BE.domain.entity.Trip;
+
 @Repository
-public interface TripRepository extends JpaRepository<Trip, Integer> {
+public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecificationExecutor<Trip> {
 
     // =========================================================================
     // PHẦN 1: KHÔI PHỤC CÁC HÀM CŨ (ĐỂ FIX LỖI BUILD ANALYTICS & DASHBOARD)
@@ -165,4 +167,43 @@ public interface TripRepository extends JpaRepository<Trip, Integer> {
 
     @Query("SELECT COALESCE(SUM(t.basePrice), 0) FROM TripSeat ts JOIN ts.trip t WHERE t.departureTime BETWEEN :start AND :end AND t.status != 'Cancelled' AND ts.status = 'Booked' AND (:routeId IS NULL OR t.route.routeId = :routeId)")
     BigDecimal sumTicketRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end, @Param("routeId") Integer routeId);
+
+    // =========================================================================
+    // PHẦN 5: TRIP GENERATION & CONFLICT DETECTION
+    // =========================================================================
+
+    /**
+     * Check if trip exists with same route and departure time
+     */
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.route.routeId = :routeId AND t.departureTime = :departureTime AND t.status != 'Cancelled'")
+    boolean existsByRouteAndDepartureTime(@Param("routeId") Integer routeId, @Param("departureTime") LocalDateTime departureTime);
+
+    /**
+     * Check if driver has time conflict (for trip generation)
+     */
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId) " +
+            "AND t.status != 'Cancelled' " +
+            "AND ((t.departureTime < :endTime AND t.arrivalTime > :startTime))")
+    boolean existsByDriverAndTimeOverlap(@Param("driverId") Integer driverId, 
+                                         @Param("startTime") LocalDateTime startTime, 
+                                         @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * Check if vehicle has time conflict (for trip generation)
+     */
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId " +
+            "AND t.status != 'Cancelled' " +
+            "AND ((t.departureTime < :endTime AND t.arrivalTime > :startTime))")
+    boolean existsByVehicleAndTimeOverlap(@Param("vehicleId") Integer vehicleId, 
+                                          @Param("startTime") LocalDateTime startTime, 
+                                          @Param("endTime") LocalDateTime endTime);
+
+    /**
+     * Get all trips for a driver on specific date (for calculating working hours)
+     */
+    @Query("SELECT t FROM Trip t WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId) " +
+            "AND DATE(t.departureTime) = :date " +
+            "AND t.status != 'Cancelled' " +
+            "ORDER BY t.departureTime ASC")
+    List<Trip> findTripsByDriverAndDate(@Param("driverId") Integer driverId, @Param("date") LocalDate date);
 }

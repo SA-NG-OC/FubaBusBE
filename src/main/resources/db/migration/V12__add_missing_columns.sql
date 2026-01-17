@@ -1,0 +1,3 @@
+-- V12: Placeholder migration (no changes needed)
+-- Route entity uses status column which already exists in V1
+-- No additional columns required

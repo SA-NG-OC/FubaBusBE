@@ -1,8 +1,5 @@
 package com.example.Fuba_BE.config;
 
-import com.example.Fuba_BE.security.CustomUserDetailsService;
-import com.example.Fuba_BE.security.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -21,6 +18,13 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+import com.example.Fuba_BE.security.CustomUserDetailsService;
+import com.example.Fuba_BE.security.JwtAccessDeniedHandler;
+import com.example.Fuba_BE.security.JwtAuthenticationEntryPoint;
+import com.example.Fuba_BE.security.JwtAuthenticationFilter;
+
+import lombok.RequiredArgsConstructor;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
@@ -29,6 +33,8 @@ public class SecurityConfig {
 
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -44,59 +50,73 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> {})
+                .cors(cors -> {
+                })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         // === PUBLIC ENDPOINTS (No authentication required) ===
                         .requestMatchers(
-                                "/auth/**",           // Authentication endpoints
-                                "/api/public/**",     // Public API
-                                "/ws/**", "/ws",      // WebSocket
-                                "/actuator/**"        // Health/metrics
+                                "/auth/**", // Authentication endpoints
+                                "/api/public/**", // Public API
+                                "/ws/**", "/ws", // WebSocket
+                                "/actuator/**" // Health/metrics
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // === TEMPORARILY ALLOW ALL FOR DEVELOPMENT ===
-                        // Comment this line and uncomment role-based policies below when ready for production
+                        // Comment this line and uncomment role-based policies below when ready for
+                        // production
                         .anyRequest().permitAll()
 
-                        // === ROLE-BASED AUTHORIZATION POLICIES (COMMENTED FOR DEV) ===
-                        // Uncomment the policies below when ready to enforce authentication/authorization
+                // === ROLE-BASED AUTHORIZATION POLICIES (COMMENTED FOR DEV) ===
+                // Uncomment the policies below when ready to enforce
+                // authentication/authorization
 
-                        // --- ADMIN ONLY ---
-                        // .requestMatchers("/admin/**").hasRole("ADMIN")
-                        // .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        // .requestMatchers("/users/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "STAFF")
+                // --- ADMIN ONLY ---
+                // .requestMatchers("/admin/**").hasRole("ADMIN")
+                // .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // .requestMatchers("/users/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "STAFF")
 
-                        // --- STAFF/EMPLOYEE ---
-                        // .requestMatchers("/employees/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.POST, "/routes/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.PUT, "/routes/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.DELETE, "/routes/**").hasRole("ADMIN")
-                        // .requestMatchers(HttpMethod.POST, "/trips/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.PUT, "/trips/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.DELETE, "/trips/**").hasRole("ADMIN")
-                        // .requestMatchers(HttpMethod.POST, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.PUT, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
-                        // .requestMatchers(HttpMethod.DELETE, "/vehicles/**").hasRole("ADMIN")
+                // --- STAFF/EMPLOYEE ---
+                // .requestMatchers("/employees/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.POST, "/routes/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/routes/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.DELETE, "/routes/**").hasRole("ADMIN")
+                // .requestMatchers(HttpMethod.POST, "/trips/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/trips/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.DELETE, "/trips/**").hasRole("ADMIN")
+                // .requestMatchers(HttpMethod.POST, "/vehicles/**").hasAnyRole("ADMIN",
+                // "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
+                // .requestMatchers(HttpMethod.DELETE, "/vehicles/**").hasRole("ADMIN")
 
-                        // --- DRIVER ---
-                        // .requestMatchers("/drivers/me/**").hasRole("DRIVER")
-                        // .requestMatchers("/drivers/{driverId}/trips").hasAnyRole("ADMIN", "STAFF", "DRIVER")
+                // --- DRIVER ---
+                // .requestMatchers("/drivers/me/**").hasRole("DRIVER")
+                // .requestMatchers("/drivers/{driverId}/trips").hasAnyRole("ADMIN", "STAFF",
+                // "DRIVER")
 
-                        // --- USER/CUSTOMER ---
-                        // .requestMatchers(HttpMethod.GET, "/routes/**").permitAll()      // Anyone can view routes
-                        // .requestMatchers(HttpMethod.GET, "/trips/**").permitAll()       // Anyone can view trips
-                        // .requestMatchers(HttpMethod.GET, "/locations/**").permitAll()   // Anyone can view locations
-                        // .requestMatchers("/bookings/**").authenticated()                // Bookings require authentication
-                        // .requestMatchers("/tickets/**").authenticated()                 // Tickets require authentication
-                        // .requestMatchers("/api/seats/**").authenticated()               // Seat locking requires authentication
+                // --- USER/CUSTOMER ---
+                // .requestMatchers(HttpMethod.GET, "/routes/**").permitAll() // Anyone can view
+                // routes
+                // .requestMatchers(HttpMethod.GET, "/trips/**").permitAll() // Anyone can view
+                // trips
+                // .requestMatchers(HttpMethod.GET, "/locations/**").permitAll() // Anyone can
+                // view locations
+                // .requestMatchers("/bookings/**").authenticated() // Bookings require
+                // authentication
+                // .requestMatchers("/tickets/**").authenticated() // Tickets require
+                // authentication
+                // .requestMatchers("/api/seats/**").authenticated() // Seat locking requires
+                // authentication
 
-                        // --- DEFAULT: All other requests require authentication ---
-                        // .anyRequest().authenticated()
+                // --- DEFAULT: All other requests require authentication ---
+                // .anyRequest().authenticated()
                 );
 
         return http.build();
