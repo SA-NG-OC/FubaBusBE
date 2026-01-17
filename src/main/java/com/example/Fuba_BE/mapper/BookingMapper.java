@@ -23,6 +23,14 @@ public class BookingMapper {
      * Convert Booking entity to BookingResponse DTO
      */
     public BookingResponse toBookingResponse(Booking booking, Trip trip, List<Ticket> tickets) {
+        return toBookingResponse(booking, trip, tickets, null);
+    }
+
+    /**
+     * Convert Booking entity to BookingResponse DTO with pre-fetched passengers
+     */
+    public BookingResponse toBookingResponse(Booking booking, Trip trip, List<Ticket> tickets, 
+                                            java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (booking == null) {
             return null;
         }
@@ -38,7 +46,7 @@ public class BookingMapper {
                 .totalAmount(booking.getTotalAmount())
                 .bookingStatus(booking.getBookingStatus())
                 .bookingType(booking.getBookingType())
-                .tickets(toTicketInfoList(tickets))
+                .tickets(toTicketInfoList(tickets, passengersByTicketId))
                 .createdAt(booking.getCreatedAt())
                 .build();
     }
@@ -69,13 +77,21 @@ public class BookingMapper {
      * Convert list of Ticket entities to TicketInfo DTOs
      */
     private List<BookingResponse.TicketInfo> toTicketInfoList(List<Ticket> tickets) {
+        return toTicketInfoList(tickets, null);
+    }
+
+    /**
+     * Convert list of Ticket entities to TicketInfo DTOs with pre-fetched passengers
+     */
+    private List<BookingResponse.TicketInfo> toTicketInfoList(List<Ticket> tickets, 
+                                                              java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (tickets == null || tickets.isEmpty()) {
             return new ArrayList<>();
         }
 
         List<BookingResponse.TicketInfo> ticketInfos = new ArrayList<>();
         for (Ticket ticket : tickets) {
-            ticketInfos.add(toTicketInfo(ticket));
+            ticketInfos.add(toTicketInfo(ticket, passengersByTicketId));
         }
         return ticketInfos;
     }
@@ -84,26 +100,37 @@ public class BookingMapper {
      * Convert Ticket entity to TicketInfo DTO
      */
     private BookingResponse.TicketInfo toTicketInfo(Ticket ticket) {
+        return toTicketInfo(ticket, null);
+    }
+
+    /**
+     * Convert Ticket entity to TicketInfo DTO with pre-fetched passenger
+     */
+    private BookingResponse.TicketInfo toTicketInfo(Ticket ticket, 
+                                                   java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (ticket == null) {
             return null;
         }
 
         TripSeat seat = ticket.getSeat();
         
-        // Get passenger info if exists
+        // Get passenger from map if available, otherwise try database (for backward compatibility)
         BookingResponse.PassengerInfo passengerInfo = null;
-        try {
-            passengerRepository.findByTicket_TicketId(ticket.getTicketId())
-                    .ifPresent(passenger -> {
-                        // Can't directly assign in lambda, so we build here
-                    });
-            
-            var passengerOpt = passengerRepository.findByTicket_TicketId(ticket.getTicketId());
-            if (passengerOpt.isPresent()) {
-                passengerInfo = toPassengerInfo(passengerOpt.get());
+        if (passengersByTicketId != null) {
+            Passenger passenger = passengersByTicketId.get(ticket.getTicketId());
+            if (passenger != null) {
+                passengerInfo = toPassengerInfo(passenger);
             }
-        } catch (Exception e) {
-            // Passenger info is optional
+        } else {
+            // Fallback to database query (only if map not provided)
+            try {
+                var passengerOpt = passengerRepository.findByTicket_TicketId(ticket.getTicketId());
+                if (passengerOpt.isPresent()) {
+                    passengerInfo = toPassengerInfo(passengerOpt.get());
+                }
+            } catch (Exception e) {
+                // Passenger info is optional
+            }
         }
 
         return BookingResponse.TicketInfo.builder()

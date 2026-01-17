@@ -985,11 +985,41 @@ public class BookingService implements IBookingService {
                 filterRequest.getSearch(),
                 pageable);
 
+        // Batch fetch tickets for all bookings to avoid N+1 query
+        List<Integer> bookingIds = bookingPage.getContent().stream()
+                .map(Booking::getBookingId)
+                .collect(Collectors.toList());
+        
+        List<Ticket> allTickets = bookingIds.isEmpty() 
+                ? List.of() 
+                : ticketRepository.findByBookingIds(bookingIds);
+        
+        // Group tickets by booking ID
+        var ticketsByBookingId = allTickets.stream()
+                .collect(Collectors.groupingBy(ticket -> ticket.getBooking().getBookingId()));
+
+        // Batch fetch passengers for all tickets to avoid N+1 query
+        List<Integer> ticketIds = allTickets.stream()
+                .map(Ticket::getTicketId)
+                .collect(Collectors.toList());
+        
+        List<Passenger> allPassengers = ticketIds.isEmpty()
+                ? List.of()
+                : passengerRepository.findByTicketIds(ticketIds);
+        
+        // Group passengers by ticket ID
+        var passengersByTicketId = allPassengers.stream()
+                .collect(Collectors.toMap(
+                    passenger -> passenger.getTicket().getTicketId(),
+                    passenger -> passenger,
+                    (p1, p2) -> p1 // In case of duplicates, keep first
+                ));
+
         // Map to response
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
                 .map(booking -> {
-                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
-                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                    List<Ticket> tickets = ticketsByBookingId.getOrDefault(booking.getBookingId(), List.of());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets, passengersByTicketId);
                 })
                 .collect(Collectors.toList());
 
