@@ -123,8 +123,19 @@ public class TripController {
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getDriverTrips(
             @PathVariable Integer driverId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false, defaultValue = "false") boolean today,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
-        Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, pageable);
+
+        // If today=true, override date range to today only
+        if (today) {
+            LocalDate todayDate = LocalDate.now();
+            startDate = todayDate;
+            endDate = todayDate;
+        }
+
+        Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, startDate, endDate, pageable);
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
         return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
     }
@@ -183,14 +194,30 @@ public class TripController {
      * Get trips assigned to the currently authenticated driver
      * Automatically retrieves trips for the logged-in driver without needing to
      * pass driverId
+     * 
+     * @param today     - if true, returns only today's trips (overrides
+     *                  startDate/endDate)
+     * @param startDate - filter trips from this date (inclusive)
+     * @param endDate   - filter trips until this date (inclusive)
      */
     @GetMapping("/my-trips")
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getMyTrips(
             Authentication authentication,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false, defaultValue = "false") boolean today,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
+
+        // If today=true, override date range to today only
+        if (today) {
+            LocalDate todayDate = LocalDate.now();
+            startDate = todayDate;
+            endDate = todayDate;
+        }
+
         Integer userId = extractUserId(authentication);
-        Page<Trip> tripPage = tripService.getMyTripsForDriver(userId, status, pageable);
+        Page<Trip> tripPage = tripService.getMyTripsForDriver(userId, status, startDate, endDate, pageable);
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
         return ResponseEntity.ok(ApiResponse.success("My trips retrieved successfully", responsePage));
     }

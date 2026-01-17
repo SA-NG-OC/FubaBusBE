@@ -312,9 +312,10 @@ public class TripService implements ITripService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable) {
-        log.info("[TripService] Getting trips for driverId: {}, status: {}, page: {}", driverId, status,
-                pageable.getPageNumber());
+    public Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable) {
+        log.info("[TripService] Getting trips for driverId: {}, status: {}, startDate: {}, endDate: {}, page: {}",
+                driverId, status, startDate, endDate, pageable.getPageNumber());
 
         if (!driverRepository.existsById(driverId)) {
             log.error("[TripService] Driver not found with id: {}", driverId);
@@ -322,7 +323,13 @@ public class TripService implements ITripService {
         }
 
         String filterStatus = StringUtils.hasText(status) ? status : null;
-        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
+
+        // Convert LocalDate to LocalDateTime
+        java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
+
+        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, startDateTime,
+                endDateTime, pageable);
 
         log.info("[TripService] Found {} trips for driver {}", trips.getTotalElements(), driverId);
         return trips;
@@ -485,8 +492,10 @@ public class TripService implements ITripService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Trip> getMyTripsForDriver(Integer userId, String status, Pageable pageable) {
-        log.info("[TripService] Getting trips for userId: {}, status: {}", userId, status);
+    public Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable) {
+        log.info("[TripService] Getting trips for userId: {}, status: {}, startDate: {}, endDate: {}",
+                userId, status, startDate, endDate);
 
         // Get driver by userId
         Driver driver = driverRepository.findByUserId(userId)
@@ -497,11 +506,17 @@ public class TripService implements ITripService {
 
         log.info("[TripService] Found driver with driverId: {} for userId: {}", driver.getDriverId(), userId);
 
+        // Convert LocalDate to LocalDateTime
+        java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
+
         // Reuse existing method with driverId
         String filterStatus = StringUtils.hasText(status) ? status : null;
         Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(
                 driver.getDriverId(),
                 filterStatus,
+                startDateTime,
+                endDateTime,
                 pageable);
 
         log.info("[TripService] Found {} trips for userId: {} (driverId: {})",
