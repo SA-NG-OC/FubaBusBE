@@ -55,6 +55,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@lombok.extern.slf4j.Slf4j
 public class TripService implements ITripService {
 
     private final TripRepository tripRepository;
@@ -312,10 +313,19 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable) {
-        if (!driverRepository.existsById(driverId))
+        log.info("[TripService] Getting trips for driverId: {}, status: {}, page: {}", driverId, status,
+                pageable.getPageNumber());
+
+        if (!driverRepository.existsById(driverId)) {
+            log.error("[TripService] Driver not found with id: {}", driverId);
             throw new ResourceNotFoundException("Driver not found");
-        return tripRepository.findTripsByDriverOrSubDriver(driverId, StringUtils.hasText(status) ? status : null,
-                pageable);
+        }
+
+        String filterStatus = StringUtils.hasText(status) ? status : null;
+        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, pageable);
+
+        log.info("[TripService] Found {} trips for driver {}", trips.getTotalElements(), driverId);
+        return trips;
     }
 
     @Override
@@ -476,15 +486,27 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getMyTripsForDriver(Integer userId, String status, Pageable pageable) {
+        log.info("[TripService] Getting trips for userId: {}, status: {}", userId, status);
+
         // Get driver by userId
         Driver driver = driverRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found for this user"));
+                .orElseThrow(() -> {
+                    log.error("[TripService] Driver profile not found for userId: {}", userId);
+                    return new ResourceNotFoundException("Driver profile not found for this user");
+                });
+
+        log.info("[TripService] Found driver with driverId: {} for userId: {}", driver.getDriverId(), userId);
 
         // Reuse existing method with driverId
-        return tripRepository.findTripsByDriverOrSubDriver(
+        String filterStatus = StringUtils.hasText(status) ? status : null;
+        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(
                 driver.getDriverId(),
-                StringUtils.hasText(status) ? status : null,
+                filterStatus,
                 pageable);
+
+        log.info("[TripService] Found {} trips for userId: {} (driverId: {})",
+                trips.getTotalElements(), userId, driver.getDriverId());
+        return trips;
     }
 
     public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
