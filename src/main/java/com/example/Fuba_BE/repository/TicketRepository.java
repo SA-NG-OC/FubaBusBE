@@ -67,6 +67,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
        List<Ticket> findByBookingId(@Param("bookingId") Integer bookingId);
 
        /**
+        * Find all tickets for multiple bookings (batch fetch to avoid N+1)
+        */
+       @Query("SELECT t FROM Ticket t JOIN FETCH t.seat WHERE t.booking.bookingId IN :bookingIds")
+       List<Ticket> findByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
+
+       /**
         * Find all tickets for a trip
         */
        @Query("SELECT t FROM Ticket t " +
