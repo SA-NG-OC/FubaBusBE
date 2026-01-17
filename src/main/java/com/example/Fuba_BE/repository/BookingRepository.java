@@ -241,4 +241,14 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         @Param("search") String search,
         Pageable pageable
     );
+
+    /**
+     * Find bookings by status and updated before a specific time
+     * Used by payment scheduler to check pending/failed payments
+     */
+    @Query("SELECT b FROM Booking b WHERE b.bookingStatus = :status AND b.updatedAt < :threshold")
+    List<Booking> findByBookingStatusAndUpdatedAtBefore(
+        @Param("status") String status,
+        @Param("threshold") LocalDateTime threshold
+    );
 }
