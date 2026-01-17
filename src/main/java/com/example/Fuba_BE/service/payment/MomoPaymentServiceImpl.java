@@ -200,9 +200,14 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
         log.debug("IPN rawSignature: {}", rawSignature);
         log.debug("IPN signature: {}", ipnRequest.getSignature());
 
-        if (!verifySignature(rawSignature, ipnRequest.getSignature())) {
-            log.error("❌ Invalid IPN signature for orderId: {}", ipnRequest.getOrderId());
-            return false;
+        // Skip signature check if this is a backend-initiated IPN (already verified via queryPaymentStatus)
+        if (!ipnRequest.isSkipSignatureCheck()) {
+            if (!verifySignature(rawSignature, ipnRequest.getSignature())) {
+                log.error("❌ Invalid IPN signature for orderId: {}", ipnRequest.getOrderId());
+                return false;
+            }
+        } else {
+            log.info("⏭️ Skipping signature check for backend-initiated IPN (orderId={})", ipnRequest.getOrderId());
         }
 
         // 2. Find booking by order ID (booking code) WITH PESSIMISTIC LOCK to prevent
@@ -241,6 +246,8 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
             log.debug("Found {} tickets for booking {}", tickets.size(), booking.getBookingCode());
 
+            boolean allSeatsAlreadyBooked = true;
+            
             for (Ticket ticket : tickets) {
                 TripSeat seat = ticket.getSeat();
                 if (seat == null) {
@@ -251,22 +258,36 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
 
                 log.debug("Checking seat {}: current status = {}", seat.getSeatNumber(), seat.getStatus());
 
-                // Critical check: seat must be Held, not Available or Booked
+                // Check if seat is already Booked (idempotency - payment already processed)
+                if ("Booked".equals(seat.getStatus())) {
+                    log.debug("ℹ️ Seat {} already Booked (payment likely already processed)", seat.getSeatNumber());
+                    continue; // Skip, already processed
+                }
+                
+                allSeatsAlreadyBooked = false;
+
+                // Critical check: seat must be Held (if not already Booked)
                 if (!"Held".equals(seat.getStatus())) {
                     log.error(
-                            "❌ Seat {} status is {} (expected Held) for booking {}. Payment rejected to prevent double booking.",
+                            "❌ Seat {} status is {} (expected Held or Booked) for booking {}. Payment rejected to prevent double booking.",
                             seat.getSeatNumber(), seat.getStatus(), booking.getBookingCode());
                     return false;
                 }
 
                 log.debug("✅ Seat {} validation passed", seat.getSeatNumber());
             }
+            
+            // If all seats already Booked but booking still Pending, complete the booking status update
+            if (allSeatsAlreadyBooked && "Pending".equals(booking.getBookingStatus())) {
+                log.warn("⚠️ All seats already Booked but booking {} still Pending. Completing status update (likely duplicate call).", 
+                    booking.getBookingCode());
+            }
 
             log.info("All {} seats validated successfully for booking {}", tickets.size(), booking.getBookingCode());
 
             // 4. Update booking status to Paid
             booking.setBookingStatus("Paid");
-            booking.setHoldExpiry(null);
+            // Keep holdExpiry as-is (database constraint NOT NULL)
             booking.setUpdatedAt(LocalDateTime.now());
             bookingRepository.save(booking);
 
@@ -274,26 +295,32 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
 
             // 5. Update tickets and seats
             for (Ticket ticket : tickets) {
-                // Update ticket status
-                ticket.setTicketStatus(TicketStatus.CONFIRMED.getDisplayName());
-                ticketRepository.save(ticket);
+                // Update ticket status only if not already Confirmed
+                if (!TicketStatus.CONFIRMED.getDisplayName().equals(ticket.getTicketStatus())) {
+                    ticket.setTicketStatus(TicketStatus.CONFIRMED.getDisplayName());
+                    ticketRepository.save(ticket);
+                    log.debug("✅ Ticket {} status updated to Confirmed", ticket.getTicketCode());
+                } else {
+                    log.debug("⏭️ Ticket {} already Confirmed, skipping update", ticket.getTicketCode());
+                }
 
-                log.debug("✅ Ticket {} status updated to Confirmed", ticket.getTicketCode());
-
-                // Update seat status to Booked (already validated above)
+                // Update seat status to Booked (skip if already Booked - idempotency)
                 TripSeat seat = ticket.getSeat();
-                seat.book();
-                tripSeatRepository.save(seat);
+                if (!"Booked".equals(seat.getStatus())) {
+                    seat.book();
+                    tripSeatRepository.save(seat);
+                    log.debug("✅ Seat {} status updated to Booked", seat.getSeatNumber());
 
-                log.debug("✅ Seat {} status updated to Booked", seat.getSeatNumber());
-
-                // Broadcast seat status change via WebSocket (non-critical, catch errors)
-                try {
-                    broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
-                    log.debug("📢 Broadcasted seat {} update via WebSocket", seat.getSeatNumber());
-                } catch (Exception e) {
-                    log.warn("⚠️ Failed to broadcast seat update via WebSocket (non-critical): {}", e.getMessage());
-                    // Continue - don't fail the payment just because WebSocket failed
+                    // Broadcast seat status change via WebSocket (non-critical, catch errors)
+                    try {
+                        broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
+                        log.debug("📢 Broadcasted seat {} update via WebSocket", seat.getSeatNumber());
+                    } catch (Exception e) {
+                        log.warn("⚠️ Failed to broadcast seat update via WebSocket (non-critical): {}", e.getMessage());
+                        // Continue - don't fail the payment just because WebSocket failed
+                    }
+                } else {
+                    log.debug("⏭️ Seat {} already Booked, skipping update", seat.getSeatNumber());
                 }
             }
 

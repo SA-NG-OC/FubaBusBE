@@ -155,9 +155,8 @@ public class PaymentController {
                 // If payment successful but booking still Pending, IPN might not have arrived yet
                 if (resultCode == 0 && "Pending".equals(bookingStatus)) {
                     log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", orderId);
-                    data.put("note", "Payment confirmed. Booking update in progress.");
                     
-                    // Optional: Query MoMo status to force sync (if requestId is available)
+                    // Query MoMo status and manually complete payment if confirmed
                     if (requestId != null && !requestId.isEmpty()) {
                         try {
                             log.info("🔍 Querying MoMo status for orderId={}, requestId={}", orderId, requestId);
@@ -165,11 +164,35 @@ public class PaymentController {
                             data.put("momoStatus", momoStatus);
                             
                             if (momoStatus.getResultCode() == 0) {
-                                log.info("✅ MoMo confirms payment successful. Backend will process via IPN.");
+                                log.info("✅ MoMo confirms payment successful. Manually completing payment...");
+                                
+                                // Build IPN request from redirect params to manually trigger payment completion
+                                MomoIpnRequest manualIpn = new MomoIpnRequest();
+                                manualIpn.setOrderId(orderId);
+                                manualIpn.setRequestId(requestId);
+                                manualIpn.setResultCode(0);
+                                manualIpn.setMessage("Success");
+                                manualIpn.setTransId(transId != null ? transId : 0L); // Use transId from redirect params
+                                manualIpn.setAmount(momoStatus.getAmount());
+                                
+                                boolean completed = momoPaymentService.handleIpnCallback(manualIpn);
+                                
+                                if (completed) {
+                                    log.info("🎉 Payment manually completed for booking {}", orderId);
+                                    bookingStatus = "Paid";
+                                    data.put("bookingStatus", bookingStatus);
+                                    data.put("note", "Payment completed successfully.");
+                                } else {
+                                    log.error("❌ Failed to manually complete payment for booking {}", orderId);
+                                    data.put("note", "Payment confirmed but processing failed. Please contact support.");
+                                }
                             }
                         } catch (Exception e) {
-                            log.error("❌ Error querying MoMo status: {}", e.getMessage());
+                            log.error("❌ Error processing manual payment completion: {}", e.getMessage(), e);
+                            data.put("note", "Payment confirmed. Processing in progress.");
                         }
+                    } else {
+                        data.put("note", "Payment confirmed. Booking update in progress.");
                     }
                 } else if (resultCode == 0 && "Paid".equals(bookingStatus)) {
                     log.info("✅ Booking {} already marked as Paid", orderId);
@@ -223,6 +246,36 @@ public class PaymentController {
         log.info("Querying MoMo payment status: orderId={}, requestId={}", orderId, requestId);
         
         MomoPaymentResponse status = momoPaymentService.queryPaymentStatus(orderId, requestId);
+        
+        // 🔥 AUTO-COMPLETE PAYMENT if MoMo confirms success but booking still Pending
+        if (status.getResultCode() == 0) {
+            try {
+                Booking booking = bookingRepository.findByBookingCode(orderId).orElse(null);
+                if (booking != null && "Pending".equals(booking.getBookingStatus())) {
+                    log.warn("⚠️ MoMo confirms payment successful but booking {} still Pending. Auto-completing...", orderId);
+                    
+                    // Manually trigger payment completion
+                    MomoIpnRequest manualIpn = new MomoIpnRequest();
+                    manualIpn.setOrderId(orderId);
+                    manualIpn.setRequestId(requestId);
+                    manualIpn.setResultCode(0);
+                    manualIpn.setMessage("Success");
+                    manualIpn.setTransId(0L); // Query response doesn't have transId
+                    manualIpn.setAmount(status.getAmount());
+                    manualIpn.setSkipSignatureCheck(true); // Skip signature - already verified via queryPaymentStatus
+                    
+                    boolean completed = momoPaymentService.handleIpnCallback(manualIpn);
+                    
+                    if (completed) {
+                        log.info("🎉 Payment auto-completed for booking {}", orderId);
+                    } else {
+                        log.error("❌ Failed to auto-complete payment for booking {}", orderId);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("❌ Error auto-completing payment: {}", e.getMessage(), e);
+            }
+        }
         
         return ResponseEntity.ok(ApiResponse.<MomoPaymentResponse>builder()
                 .success(status.getResultCode() == 0)
