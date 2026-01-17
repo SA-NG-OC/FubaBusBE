@@ -303,11 +303,35 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             return true;
         } else {
             // Payment failed
-            log.warn("Payment failed for booking {}: {}", booking.getBookingCode(), ipnRequest.getMessage());
+            log.warn("💳 Payment failed for booking {}: {}", booking.getBookingCode(), ipnRequest.getMessage());
 
-            // Optionally update booking status or leave as Pending for retry
-            // booking.setBookingStatus("PaymentFailed");
-            // bookingRepository.save(booking);
+            // Update booking status to PaymentFailed
+            booking.setBookingStatus("PaymentFailed");
+            booking.setUpdatedAt(LocalDateTime.now());
+            bookingRepository.save(booking);
+            
+            log.info("✅ Booking {} status updated to PaymentFailed", booking.getBookingCode());
+
+            // Release seats back to Available
+            List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
+            int seatsReleased = 0;
+            for (Ticket ticket : tickets) {
+                TripSeat seat = ticket.getSeat();
+                if (seat != null && "Held".equals(seat.getStatus())) {
+                    seat.release();
+                    tripSeatRepository.save(seat);
+                    seatsReleased++;
+                    
+                    // Broadcast seat status change via WebSocket
+                    try {
+                        broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
+                    } catch (Exception e) {
+                        log.warn("⚠️ Failed to broadcast seat update: {}", e.getMessage());
+                    }
+                }
+            }
+            
+            log.info("🔓 Released {} seats for failed payment booking {}", seatsReleased, booking.getBookingCode());
 
             return false;
         }
