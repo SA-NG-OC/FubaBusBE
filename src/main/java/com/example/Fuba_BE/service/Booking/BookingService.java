@@ -187,13 +187,21 @@ public class BookingService implements IBookingService {
         String bookingCode = generateBookingCode();
 
         User customer = null;
-        if (!Boolean.TRUE.equals(request.getIsGuestBooking())) {
+        boolean isGuest = Boolean.TRUE.equals(request.getIsGuestBooking());
+        
+        if (!isGuest) {
+            // If not guest booking, userId must be a valid customer ID
             try {
                 Integer customerId = Integer.parseInt(request.getUserId());
-                customer = userRepository.findById(customerId).orElse(null);
+                customer = userRepository.findById(customerId)
+                        .orElseThrow(() -> new NotFoundException(
+                                "Không tìm thấy người dùng với ID: " + customerId + ". Vui lòng đăng nhập lại."));
+                log.info("Booking for authenticated user: {} (ID: {})", customer.getFullName(), customerId);
             } catch (NumberFormatException e) {
-                log.debug("User ID {} is not a valid customer ID, treating as guest", request.getUserId());
+                throw new BadRequestException("User ID không hợp lệ: " + request.getUserId());
             }
+        } else {
+            log.info("Creating guest booking with session ID: {}", request.getGuestSessionId());
         }
 
         Booking booking = Booking.builder()
@@ -206,8 +214,8 @@ public class BookingService implements IBookingService {
                 .totalAmount(totalAmount)
                 .bookingStatus("Held")
                 .bookingType("Online")
-                .isGuestBooking(customer == null)
-                .guestSessionId(customer == null ? request.getGuestSessionId() : null)
+                .isGuestBooking(isGuest)
+                .guestSessionId(isGuest ? request.getGuestSessionId() : null)
                 .holdExpiry(LocalDateTime.now().plusMinutes(15))
                 .build();
 
