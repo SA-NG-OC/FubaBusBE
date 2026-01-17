@@ -160,8 +160,8 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
                 LEFT JOIN FETCH r.destination dest
                 WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId)
                 AND (:status IS NULL OR t.status = :status)
-                AND (:startDate IS NULL OR t.departureTime >= :startDate)
-                AND (:endDate IS NULL OR t.departureTime <= :endDate)
+                AND (CAST(:startDate AS timestamp) IS NULL OR t.departureTime >= :startDate)
+                AND (CAST(:endDate AS timestamp) IS NULL OR t.departureTime <= :endDate)
             """)
     Page<Trip> findTripsByDriverOrSubDriver(
             @Param("driverId") Integer driverId,
