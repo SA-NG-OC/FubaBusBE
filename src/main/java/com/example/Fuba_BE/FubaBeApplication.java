@@ -3,7 +3,6 @@ package com.example.Fuba_BE;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
-
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

@@ -1,5 +1,6 @@
 package com.example.Fuba_BE.service.Ticket;
 
+import com.example.Fuba_BE.domain.entity.Ticket;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInRequestDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
@@ -21,4 +22,5 @@ public interface ITicketService {
      * @return DTO containing formatted data for PDF
      */
     TicketExportDTO getTicketExportData(Integer ticketId);
+    boolean confirmTicket(String ticketCode);
 }
