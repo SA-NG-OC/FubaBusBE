@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.Fuba_BE.dto.User.CreateEmployeeWithAccountRequest;
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
 import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
 import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
@@ -18,6 +19,11 @@ public interface IUserService {
      * Admin creates user with specific role
      */
     UserResponseDTO createUserByAdmin(CreateUserByAdminRequest request);
+
+    /**
+     * Admin creates employee (STAFF role) with avatar
+     */
+    UserResponseDTO createEmployeeWithAccount(CreateEmployeeWithAccountRequest request, MultipartFile avatarFile);
 
     /**
      * Get all users with pagination

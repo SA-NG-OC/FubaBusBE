@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.Fuba_BE.dto.User.CreateEmployeeWithAccountRequest;
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
 import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
 import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
@@ -60,6 +63,23 @@ public class UserController {
         UserResponseDTO response = userService.createUserByAdmin(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("User created successfully", response));
+    }
+
+    /**
+     * Admin creates employee (STAFF role) with avatar
+     * Only ADMIN can create employees
+     * Accepts multipart/form-data with optional avatar file
+     */
+    @PostMapping(value = "/employees", consumes = "multipart/form-data")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponseDTO>> createEmployee(
+            @Valid @ModelAttribute CreateEmployeeWithAccountRequest request,
+            @RequestPart(value = "avatar", required = false) MultipartFile avatarFile) {
+        log.info("📥 Request to create employee - Email: {}, Has Avatar: {}",
+                request.getEmail(), avatarFile != null && !avatarFile.isEmpty());
+        UserResponseDTO response = userService.createEmployeeWithAccount(request, avatarFile);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Employee created successfully", response));
     }
 
     /**
