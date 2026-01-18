@@ -241,4 +241,36 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
             "AND t.status != 'Cancelled' " +
             "ORDER BY t.departureTime ASC")
     List<Trip> findTripsByDriverAndDate(@Param("driverId") Integer driverId, @Param("date") LocalDate date);
+
+    // 1. Hàm chỉ lấy ID (trả về List ID) dùng cho Bước 1
+// Lưu ý: Không dùng JOIN FETCH ở đây
+    @Query("SELECT t.tripId FROM Trip t " +
+            "JOIN t.route r " +
+            "JOIN t.vehicle v " +
+            "JOIN v.vehicleType vt " +
+            "WHERE (:status IS NULL OR t.status = :status) " +
+            // ... các điều kiện filter khác ...
+            "")
+    Page<Integer> findTripIds(@Param("status") String status, Pageable pageable);
+// (Thực tế bạn có thể dùng Specification<Trip> nhưng chỉ select root.get("tripId"))
+
+
+    @Query("SELECT DISTINCT t FROM Trip t " +
+            "LEFT JOIN FETCH t.route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "LEFT JOIN FETCH t.vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType " +
+            "LEFT JOIN FETCH t.driver d " +
+            "LEFT JOIN FETCH d.user " +
+            "LEFT JOIN FETCH t.subDriver sd " +
+            "LEFT JOIN FETCH sd.user " +
+            "WHERE t.tripId IN :ids")
+    List<Trip> findTripsDetailByIds(@Param("ids") List<Integer> ids);
+
+    @Query("SELECT ts.trip.tripId, LOWER(ts.status), COUNT(ts) " +
+            "FROM TripSeat ts " +
+            "WHERE ts.trip.tripId IN :tripIds " +
+            "GROUP BY ts.trip.tripId, LOWER(ts.status)")
+    List<Object[]> countSeatStatusByTripIds(@Param("tripIds") List<Integer> tripIds);
 }
