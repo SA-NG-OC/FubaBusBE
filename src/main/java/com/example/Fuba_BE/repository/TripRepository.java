@@ -46,6 +46,7 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
         List<Object[]> getWeeklyTicketSales();
 
         // 3. Hàm cho DashboardService (Dòng 98 bị lỗi - List hôm nay)
+        // Incoming version: Thêm filter routeId - linh hoạt hơn
         @Query(value = """
                             SELECT t,
                             (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
@@ -56,13 +57,17 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
                             LEFT JOIN FETCH t.vehicle v
                             LEFT JOIN FETCH v.vehicleType vt
                             WHERE t.departureTime BETWEEN :start AND :end
+                            AND (:routeId IS NULL OR r.routeId = :routeId)
                         """, countQuery = """
                             SELECT COUNT(t) FROM Trip t
+                            LEFT JOIN t.route r
                             WHERE t.departureTime BETWEEN :start AND :end
+                            AND (:routeId IS NULL OR r.routeId = :routeId)
                         """)
         Page<Object[]> findTripsWithBookingCount(
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end,
+                        @Param("routeId") Integer routeId,
                         Pageable pageable);
 
         // =========================================================================
@@ -270,7 +275,7 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
         List<Trip> findExpiredWaitingTrips(@Param("now") LocalDateTime now);
 
         // =========================================================================
-        // PHẦN 6: BATCH QUERIES TO AVOID N+1
+        // PHẦN 6: BATCH QUERIES TO AVOID N+1 (OPTIMIZED - 1 query for all statuses)
         // =========================================================================
 
         /**
@@ -293,4 +298,33 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
                         "AND LOWER(ts.status) IN ('checkedin', 'used', 'checked-in') " +
                         "GROUP BY ts.trip.tripId")
         List<Object[]> batchCountCheckedInSeats(@Param("tripIds") List<Integer> tripIds);
+
+        /**
+         * MOST OPTIMIZED: Get ALL seat statuses in ONE single query
+         * Returns [tripId, status (lowercase), count] for each trip-status combination
+         * Better than batchCountBookedSeats + batchCountCheckedInSeats (2 queries → 1
+         * query)
+         */
+        @Query("SELECT ts.trip.tripId, LOWER(ts.status), COUNT(ts) " +
+                        "FROM TripSeat ts " +
+                        "WHERE ts.trip.tripId IN :tripIds " +
+                        "GROUP BY ts.trip.tripId, LOWER(ts.status)")
+        List<Object[]> countSeatStatusByTripIds(@Param("tripIds") List<Integer> tripIds);
+
+        /**
+         * Fetch trip details by list of IDs with eager loading
+         * Used in 2-phase query pattern: 1) Get IDs → 2) Eager load details
+         */
+        @Query("SELECT DISTINCT t FROM Trip t " +
+                        "LEFT JOIN FETCH t.route r " +
+                        "LEFT JOIN FETCH r.origin " +
+                        "LEFT JOIN FETCH r.destination " +
+                        "LEFT JOIN FETCH t.vehicle v " +
+                        "LEFT JOIN FETCH v.vehicleType " +
+                        "LEFT JOIN FETCH t.driver d " +
+                        "LEFT JOIN FETCH d.user " +
+                        "LEFT JOIN FETCH t.subDriver sd " +
+                        "LEFT JOIN FETCH sd.user " +
+                        "WHERE t.tripId IN :ids")
+        List<Trip> findTripsDetailByIds(@Param("ids") List<Integer> ids);
 }

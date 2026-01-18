@@ -16,5 +16,5 @@ public interface IDashboardService {
     DashboardChartDTO getDashboardCharts();
 
     // 3. Lấy danh sách chuyến đi hôm nay (có phân trang)
-    Page<DashboardTripDTO> getTodayTrips(LocalDate date, Pageable pageable);
+    Page<DashboardTripDTO> getTodayTrips(LocalDate date, Integer routeId, Pageable pageable);
 }

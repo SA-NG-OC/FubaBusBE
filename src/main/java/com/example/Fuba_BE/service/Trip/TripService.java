@@ -5,11 +5,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -76,11 +79,13 @@ public class TripService implements ITripService {
             List<String> timeRanges, List<String> vehicleTypes,
             Integer minAvailableSeats) {
 
+        // --- 1. SETUP PAGEABLE ---
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
                 : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
+        // --- 2. TẠO SPECIFICATION (FILTER) ---
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -91,18 +96,20 @@ public class TripService implements ITripService {
             // Also filter: departureTime must be in the future
             predicates.add(cb.greaterThan(root.get("departureTime"), LocalDateTime.now()));
 
-            // 1. Search (Route Name)
+            // Search by Route Name
             if (search != null && !search.isEmpty()) {
-                predicates.add(cb.like(cb.lower(root.get("routeName")), "%" + search.toLowerCase() + "%"));
-            }
-            if (originId != null) {
-                predicates.add(cb.equal(root.get("route").get("origin").get("id"), originId));
-            }
-            if (destId != null) {
-                predicates.add(cb.equal(root.get("route").get("destination").get("id"), destId));
+                predicates.add(cb.like(cb.lower(root.get("route").get("routeName")), "%" + search.toLowerCase() + "%"));
             }
 
-            // 2. Price Range [FIXED]: Sửa "price" thành "basePrice" và ép kiểu BigDecimal
+            // 2.2 Location
+            if (originId != null) {
+                predicates.add(cb.equal(root.get("route").get("origin").get("locationId"), originId));
+            }
+            if (destId != null) {
+                predicates.add(cb.equal(root.get("route").get("destination").get("locationId"), destId));
+            }
+
+            // 2.3 Price
             if (minPrice != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(minPrice)));
             }
@@ -110,17 +117,16 @@ public class TripService implements ITripService {
                 predicates.add(cb.lessThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(maxPrice)));
             }
 
+            // 2.4 Date
             if (date != null) {
                 LocalDateTime startOfDay = date.atStartOfDay();
                 LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
                 predicates.add(cb.between(root.get("departureTime"), startOfDay, endOfDay));
             }
 
-            // 3. Time Ranges [FIXED]: Sửa cho PostgreSQL (Supabase) dùng date_part
+            // 2.5 Time Ranges (PostgreSQL date_part)
             if (timeRanges != null && !timeRanges.isEmpty()) {
                 List<Predicate> timePredicates = new ArrayList<>();
-
-                // Fix: Dùng date_part thay vì function("hour")
                 Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"),
                         root.get("departureTime"));
                 Expression<Integer> hourExp = hourDouble.as(Integer.class);
@@ -145,19 +151,22 @@ public class TripService implements ITripService {
                     predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
             }
 
-            // 4. Vehicle Types
+            // 2.6 Vehicle Types
             if (vehicleTypes != null && !vehicleTypes.isEmpty()) {
                 predicates.add(root.get("vehicle").get("vehicleType").get("typeName").in(vehicleTypes));
             }
 
-            // 5. Min Available Seats (Subquery)
+            // 2.7 Min Available Seats
             if (minAvailableSeats != null && minAvailableSeats > 0) {
+                // Nếu bạn đã tạo cột available_seats thì dùng dòng này (SIÊU NHANH):
+                // predicates.add(cb.greaterThanOrEqualTo(root.get("availableSeats"),
+                // minAvailableSeats));
+
+                // Nếu chưa có cột đó thì dùng Subquery (Cách hiện tại):
                 Subquery<Long> sub = query.subquery(Long.class);
                 jakarta.persistence.criteria.Root<TripSeat> subRoot = sub.from(TripSeat.class);
-
                 sub.select(cb.count(subRoot));
-                sub.where(
-                        cb.equal(subRoot.get("trip"), root),
+                sub.where(cb.equal(subRoot.get("trip"), root),
                         cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName()));
                 predicates.add(cb.greaterThanOrEqualTo(sub, minAvailableSeats.longValue()));
             }
@@ -165,45 +174,81 @@ public class TripService implements ITripService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        Page<Trip> tripPage = tripRepository.findAll(spec, pageable);
+        // --- OPTIMIZED 3-PHASE APPROACH (1 query for stats instead of 2) ---
 
-        // OPTIMIZATION: Batch fetch seat stats to avoid N+1 queries
-        List<Integer> tripIds = tripPage.getContent().stream()
+        // PHASE 1: Get Trip IDs (light query with filters)
+        Page<Trip> idPage = tripRepository.findAll(spec, pageable);
+        List<Integer> tripIds = idPage.getContent().stream()
                 .map(Trip::getTripId)
                 .collect(Collectors.toList());
 
-        // Single query for all booked seats
-        Map<Integer, Long> bookedSeatsMap = new java.util.HashMap<>();
-        if (!tripIds.isEmpty()) {
-            tripRepository.batchCountBookedSeats(tripIds)
-                    .forEach(row -> bookedSeatsMap.put((Integer) row[0], (Long) row[1]));
+        if (tripIds.isEmpty()) {
+            return Page.empty(pageable);
         }
 
-        // Single query for all checked-in seats
-        Map<Integer, Long> checkedInSeatsMap = new java.util.HashMap<>();
-        if (!tripIds.isEmpty()) {
-            tripRepository.batchCountCheckedInSeats(tripIds)
-                    .forEach(row -> checkedInSeatsMap.put((Integer) row[0], (Long) row[1]));
+        // PHASE 2: Eager Load Trip Details (JOIN FETCH all relationships)
+        List<Trip> detailedTrips = tripRepository.findTripsDetailByIds(tripIds);
+
+        // Preserve original order (SQL IN doesn't guarantee order)
+        Map<Integer, Trip> tripMap = detailedTrips.stream()
+                .collect(Collectors.toMap(Trip::getTripId, trip -> trip));
+
+        List<Trip> sortedTrips = tripIds.stream()
+                .map(tripMap::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        // PHASE 3: Batch Query ALL seat statuses in ONE query
+        // Returns [tripId, status (lowercase), count] - more efficient than 2 separate
+        // queries
+        List<Object[]> rawStats = tripRepository.countSeatStatusByTripIds(tripIds);
+
+        // Convert to Map<TripId, Map<Status, Count>>
+        Map<Integer, Map<String, Integer>> statsMap = new HashMap<>();
+        for (Object[] row : rawStats) {
+            Integer tId = (Integer) row[0];
+            String status = (String) row[1];
+            Long count = (Long) row[2];
+
+            statsMap.putIfAbsent(tId, new HashMap<>());
+            statsMap.get(tId).put(status, count.intValue());
         }
 
-        return tripPage.map(trip -> {
-            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
+        // PHASE 4: Map to DTOs (all data from memory, zero extra queries)
+        List<TripDetailedResponseDTO> dtos = sortedTrips.stream()
+                .map(trip -> {
+                    TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
 
-            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
-                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
-            } else {
-                dto.setTotalSeats(40); // Default fallback
-            }
+                    // Set Total Seats
+                    if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+                        dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+                    } else {
+                        dto.setTotalSeats(40); // Default fallback
+                    }
 
-            // Use batch-fetched stats instead of N+1 queries
-            dto.setBookedSeats(bookedSeatsMap.getOrDefault(trip.getTripId(), 0L).intValue());
-            dto.setCheckedInSeats(checkedInSeatsMap.getOrDefault(trip.getTripId(), 0L).intValue());
+                    // Get stats from memory (zero queries)
+                    Map<String, Integer> tripStats = statsMap.getOrDefault(trip.getTripId(), new HashMap<>());
 
-            return dto;
-        });
+                    // Sum all "booked" type statuses
+                    int booked = tripStats.getOrDefault("booked", 0) +
+                            tripStats.getOrDefault("sold", 0) +
+                            tripStats.getOrDefault("reserved", 0) +
+                            tripStats.getOrDefault("paid", 0);
+
+                    // Sum all "checked-in" type statuses
+                    int checkedIn = tripStats.getOrDefault("checkedin", 0) +
+                            tripStats.getOrDefault("used", 0) +
+                            tripStats.getOrDefault("checked-in", 0);
+
+                    dto.setBookedSeats(booked);
+                    dto.setCheckedInSeats(checkedIn);
+
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(dtos, pageable, idPage.getTotalElements());
     }
-
-    // ... CÁC HÀM KHÁC GIỮ NGUYÊN NHƯ CŨ ...
 
     @Override
     @Transactional(readOnly = true)

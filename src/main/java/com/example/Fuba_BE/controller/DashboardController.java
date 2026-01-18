@@ -50,19 +50,23 @@ public class DashboardController {
 
     // 3. API Danh sách chuyến đi trong ngày (Table)
     @GetMapping("/todays-trips")
-    @Operation(summary = "Get trips for a specific date", description = "Retrieve paginated list of trips for monitoring")
+    @Operation(summary = "Get trips for a specific date with optional route filter",
+            description = "Retrieve paginated list of trips. Can filter by Route ID.")
     public ResponseEntity<ApiResponse<Page<DashboardTripDTO>>> getTodayTrips(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Integer routeId, // <--- Thêm tham số này (không bắt buộc)
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        // Xử lý giá trị mặc định
+        // Xử lý giá trị mặc định cho ngày
         LocalDate targetDate = (date == null) ? LocalDate.now() : date;
 
-        // Tạo Pageable (Sắp xếp theo giờ khởi hành tăng dần)
+        // Tạo Pageable
         Pageable pageable = PageRequest.of(page, size, Sort.by("departureTime").ascending());
 
-        Page<DashboardTripDTO> trips = dashboardService.getTodayTrips(targetDate, pageable);
+        // Gọi service với routeId (có thể là null nếu không truyền)
+        Page<DashboardTripDTO> trips = dashboardService.getTodayTrips(targetDate, routeId, pageable);
+
         return ResponseEntity.ok(ApiResponse.success("Trips list retrieved successfully", trips));
     }
 }
