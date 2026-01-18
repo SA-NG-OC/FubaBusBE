@@ -90,18 +90,16 @@ public class DashboardService implements IDashboardService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<DashboardTripDTO> getTodayTrips(LocalDate date, Pageable pageable) {
+    public Page<DashboardTripDTO> getTodayTrips(LocalDate date, Integer routeId, Pageable pageable) { // Thêm routeId vào tham số
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        // Gọi hàm mới trả về Object[] (Trip + Count)
-        Page<Object[]> page = tripRepository.findTripsWithBookingCount(startOfDay, endOfDay, pageable);
+        // Truyền routeId xuống repository
+        Page<Object[]> page = tripRepository.findTripsWithBookingCount(startOfDay, endOfDay, routeId, pageable);
 
         return page.map(row -> {
             Trip trip = (Trip) row[0];
-            Long bookedCount = (Long) row[1]; // Số ghế đã đặt lấy từ Subquery
-
-            // Truyền bookedCount vào Mapper
+            Long bookedCount = (Long) row[1];
             return dashboardMapper.toDashboardTripDTO(trip, bookedCount);
         });
     }

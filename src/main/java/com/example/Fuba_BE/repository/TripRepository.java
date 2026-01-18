@@ -47,22 +47,27 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
 
     // 3. Hàm cho DashboardService (Dòng 98 bị lỗi - List hôm nay)
     @Query(value = """
-                SELECT t,
-                (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
-                FROM Trip t
-                LEFT JOIN FETCH t.route r
-                LEFT JOIN FETCH r.origin o
-                LEFT JOIN FETCH r.destination d
-                LEFT JOIN FETCH t.vehicle v
-                LEFT JOIN FETCH v.vehicleType vt
-                WHERE t.departureTime BETWEEN :start AND :end
-            """, countQuery = """
-                SELECT COUNT(t) FROM Trip t
-                WHERE t.departureTime BETWEEN :start AND :end
-            """)
+    SELECT t,
+    (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
+    FROM Trip t
+    LEFT JOIN FETCH t.route r
+    LEFT JOIN FETCH r.origin o
+    LEFT JOIN FETCH r.destination d
+    LEFT JOIN FETCH t.vehicle v
+    LEFT JOIN FETCH v.vehicleType vt
+    WHERE t.departureTime BETWEEN :start AND :end
+    AND (:routeId IS NULL OR r.routeId = :routeId) 
+""",
+            countQuery = """
+    SELECT COUNT(t) FROM Trip t
+    LEFT JOIN t.route r 
+    WHERE t.departureTime BETWEEN :start AND :end
+    AND (:routeId IS NULL OR r.routeId = :routeId)
+""")
     Page<Object[]> findTripsWithBookingCount(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
+            @Param("routeId") Integer routeId, // <--- Thêm tham số này
             Pageable pageable);
 
     // =========================================================================
