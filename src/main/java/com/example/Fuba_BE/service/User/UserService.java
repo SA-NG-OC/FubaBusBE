@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.example.Fuba_BE.domain.entity.Role;
 import com.example.Fuba_BE.domain.entity.User;
+import com.example.Fuba_BE.dto.User.CreateEmployeeWithAccountRequest;
 import com.example.Fuba_BE.dto.User.CreateUserByAdminRequest;
 import com.example.Fuba_BE.dto.User.ProfileResponseDTO;
 import com.example.Fuba_BE.dto.User.UpdatePasswordRequest;
@@ -83,6 +84,77 @@ public class UserService implements IUserService {
         } catch (Exception e) {
             log.error("🔥 Critical error creating user: {}", e.getMessage(), e);
             throw new BadRequestException("Failed to create user: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO createEmployeeWithAccount(CreateEmployeeWithAccountRequest request,
+            MultipartFile avatarFile) {
+        log.info("🚀 Admin creating new employee (STAFF) with email: {}, Has avatar: {}", request.getEmail(),
+                avatarFile != null && !avatarFile.isEmpty());
+
+        String avatarUrl = null;
+
+        try {
+            // Validate email and phone uniqueness
+            validateEmailNotExists(request.getEmail());
+            validatePhoneNotExists(request.getPhoneNumber());
+
+            // Upload avatar if provided
+            if (avatarFile != null && !avatarFile.isEmpty()) {
+                log.info("Uploading employee avatar to Cloudinary");
+                try {
+                    avatarUrl = cloudinaryService.uploadImage(avatarFile);
+                    log.info("Avatar uploaded successfully: {}", avatarUrl);
+                } catch (Exception uploadException) {
+                    log.error("Avatar upload failed: {}", uploadException.getMessage());
+                    throw new BadRequestException("Failed to upload avatar: " + uploadException.getMessage());
+                }
+            }
+
+            // Get STAFF role
+            Role staffRole = roleRepository.findByRoleName("STAFF")
+                    .orElseThrow(() -> {
+                        log.error("❌ STAFF role not found");
+                        return new ResourceNotFoundException("STAFF role not found");
+                    });
+
+            log.info("✅ Creating employee with STAFF role");
+
+            // Build user entity
+            User user = User.builder()
+                    .fullName(request.getFullName())
+                    .email(request.getEmail())
+                    .phoneNumber(request.getPhoneNumber())
+                    .password(passwordEncoder.encode(request.getPassword()))
+                    .role(staffRole)
+                    .status("Active")
+                    .avt(avatarUrl)
+                    .emailVerified(false)
+                    .failedLoginAttempts(0)
+                    .build();
+
+            User savedUser = userRepository.save(user);
+            log.info("✅ Employee created successfully with ID: {}", savedUser.getUserId());
+
+            return userMapper.toResponseDTO(savedUser);
+
+        } catch (BadRequestException | ResourceNotFoundException e) {
+            // If transaction fails and avatar was uploaded, delete it
+            if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                log.warn("Transaction failed, deleting uploaded avatar: {}", avatarUrl);
+                cloudinaryService.deleteImageByUrl(avatarUrl);
+            }
+            throw e;
+        } catch (Exception e) {
+            // If transaction fails and avatar was uploaded, delete it
+            if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                log.warn("Transaction failed, deleting uploaded avatar: {}", avatarUrl);
+                cloudinaryService.deleteImageByUrl(avatarUrl);
+            }
+            log.error("🔥 Critical error creating employee: {}", e.getMessage(), e);
+            throw new BadRequestException("Failed to create employee: " + e.getMessage());
         }
     }
 

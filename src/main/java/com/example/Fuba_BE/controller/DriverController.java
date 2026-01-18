@@ -11,14 +11,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import com.example.Fuba_BE.dto.Driver.CreateDriverWithAccountRequest;
 import com.example.Fuba_BE.dto.Driver.DriverRequestDTO;
 import com.example.Fuba_BE.dto.Driver.DriverResponseDTO;
 import com.example.Fuba_BE.dto.Driver.DriverSelectionDTO;
@@ -87,6 +91,23 @@ public class DriverController {
         DriverResponseDTO createdDriver = driverService.createDriver(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Driver created successfully", createdDriver));
+    }
+
+    /**
+     * Create new driver with user account and avatar
+     * Only ADMIN and STAFF can create drivers
+     * Accepts multipart/form-data with optional avatar file
+     */
+    @PostMapping(value = "/with-account", consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<DriverResponseDTO>> createDriverWithAccount(
+            @Valid @ModelAttribute CreateDriverWithAccountRequest request,
+            @RequestPart(value = "avatar", required = false) MultipartFile avatarFile) {
+        log.info("📥 Request to create driver with account - Email: {}, Has Avatar: {}",
+                request.getEmail(), avatarFile != null && !avatarFile.isEmpty());
+        DriverResponseDTO createdDriver = driverService.createDriverWithAccount(request, avatarFile);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Driver and account created successfully", createdDriver));
     }
 
     /**

@@ -4,7 +4,9 @@ import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
+import com.example.Fuba_BE.dto.Driver.CreateDriverWithAccountRequest;
 import com.example.Fuba_BE.dto.Driver.DriverRequestDTO;
 import com.example.Fuba_BE.dto.Driver.DriverResponseDTO;
 import com.example.Fuba_BE.dto.Driver.DriverSelectionDTO;
@@ -17,6 +19,8 @@ public interface IDriverService {
     DriverResponseDTO getDriverById(Integer id);
 
     DriverResponseDTO createDriver(DriverRequestDTO request);
+
+    DriverResponseDTO createDriverWithAccount(CreateDriverWithAccountRequest request, MultipartFile avatarFile);
 
     DriverResponseDTO updateDriver(Integer id, DriverRequestDTO request);
 
