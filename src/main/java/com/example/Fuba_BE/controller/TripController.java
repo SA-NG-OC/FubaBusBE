@@ -123,17 +123,24 @@ public class TripController {
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getDriverTrips(
             @PathVariable Integer driverId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false, defaultValue = "false") boolean today,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        // If today=true, override date range to today only
+        // Priority 1: If today=true, override all date params to today
         if (today) {
             LocalDate todayDate = LocalDate.now();
             startDate = todayDate;
             endDate = todayDate;
         }
+        // Priority 2: If date is provided, use it for both start and end
+        else if (date != null) {
+            startDate = date;
+            endDate = date;
+        }
+        // Priority 3: Use startDate/endDate as provided (can be null)
 
         Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, startDate, endDate, pageable);
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
@@ -195,8 +202,15 @@ public class TripController {
      * Automatically retrieves trips for the logged-in driver without needing to
      * pass driverId
      * 
+     * Supports 3 modes:
+     * 1. Single date: ?date=2026-01-18
+     * 2. Date range: ?startDate=2026-01-18&endDate=2026-01-25
+     * 3. Today flag: ?today=true (overrides other params)
+     * 
+     * @param date      - filter trips for a specific date (sets
+     *                  startDate=endDate=date)
      * @param today     - if true, returns only today's trips (overrides
-     *                  startDate/endDate)
+     *                  date/startDate/endDate)
      * @param startDate - filter trips from this date (inclusive)
      * @param endDate   - filter trips until this date (inclusive)
      */
@@ -204,17 +218,24 @@ public class TripController {
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getMyTrips(
             Authentication authentication,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false, defaultValue = "false") boolean today,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        // If today=true, override date range to today only
+        // Priority 1: If today=true, override all date params to today
         if (today) {
             LocalDate todayDate = LocalDate.now();
             startDate = todayDate;
             endDate = todayDate;
         }
+        // Priority 2: If date is provided, use it for both start and end
+        else if (date != null) {
+            startDate = date;
+            endDate = date;
+        }
+        // Priority 3: Use startDate/endDate as provided (can be null)
 
         Integer userId = extractUserId(authentication);
         Page<Trip> tripPage = tripService.getMyTripsForDriver(userId, status, startDate, endDate, pageable);
