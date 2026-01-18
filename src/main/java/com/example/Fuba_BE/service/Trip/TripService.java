@@ -84,6 +84,13 @@ public class TripService implements ITripService {
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
+            // DEFAULT: Only show Waiting trips (not started yet)
+            // Only show trips that are available for booking
+            predicates.add(cb.equal(root.get("status"), "Waiting"));
+
+            // Also filter: departureTime must be in the future
+            predicates.add(cb.greaterThan(root.get("departureTime"), LocalDateTime.now()));
+
             // 1. Search (Route Name)
             if (search != null && !search.isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("routeName")), "%" + search.toLowerCase() + "%"));
@@ -159,6 +166,26 @@ public class TripService implements ITripService {
         };
 
         Page<Trip> tripPage = tripRepository.findAll(spec, pageable);
+
+        // OPTIMIZATION: Batch fetch seat stats to avoid N+1 queries
+        List<Integer> tripIds = tripPage.getContent().stream()
+                .map(Trip::getTripId)
+                .collect(Collectors.toList());
+
+        // Single query for all booked seats
+        Map<Integer, Long> bookedSeatsMap = new java.util.HashMap<>();
+        if (!tripIds.isEmpty()) {
+            tripRepository.batchCountBookedSeats(tripIds)
+                    .forEach(row -> bookedSeatsMap.put((Integer) row[0], (Long) row[1]));
+        }
+
+        // Single query for all checked-in seats
+        Map<Integer, Long> checkedInSeatsMap = new java.util.HashMap<>();
+        if (!tripIds.isEmpty()) {
+            tripRepository.batchCountCheckedInSeats(tripIds)
+                    .forEach(row -> checkedInSeatsMap.put((Integer) row[0], (Long) row[1]));
+        }
+
         return tripPage.map(trip -> {
             TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
 
@@ -168,7 +195,11 @@ public class TripService implements ITripService {
                 dto.setTotalSeats(40); // Default fallback
             }
 
-            return this.enrichTripStats(dto, trip.getTripId());
+            // Use batch-fetched stats instead of N+1 queries
+            dto.setBookedSeats(bookedSeatsMap.getOrDefault(trip.getTripId(), 0L).intValue());
+            dto.setCheckedInSeats(checkedInSeatsMap.getOrDefault(trip.getTripId(), 0L).intValue());
+
+            return dto;
         });
     }
 
@@ -223,6 +254,13 @@ public class TripService implements ITripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found"));
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
+
+        // Validate vehicle status - only "Operational" vehicles can be assigned to
+        // trips
+        if (!"Operational".equalsIgnoreCase(vehicle.getStatus())) {
+            throw new BadRequestException("Vehicle is not operational! Current status: " + vehicle.getStatus());
+        }
+
         Driver driver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
@@ -246,12 +284,54 @@ public class TripService implements ITripService {
         Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 5.0;
         LocalDateTime arrivalTime = departureTime.plusMinutes((long) (durationHours * 60));
 
-        if (tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime, arrivalTime))
-            throw new BadRequestException("Xe bận!");
-        if (tripRepository.isPersonBusy(request.getDriverId(), departureTime, arrivalTime))
-            throw new BadRequestException("Tài xế bận!");
-        if (subDriver != null && tripRepository.isPersonBusy(subDriver.getDriverId(), departureTime, arrivalTime))
-            throw new BadRequestException("Phụ xe bận!");
+        // Log kiểm tra conflict
+        log.info("=== CHECKING CONFLICTS ===");
+        log.info("Vehicle ID: {}, License: {}", vehicle.getVehicleId(), vehicle.getLicensePlate());
+        log.info("Departure: {}", departureTime);
+        log.info("Arrival: {}", arrivalTime);
+        log.info("Duration: {} hours", durationHours);
+
+        boolean vehicleConflict = tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime,
+                arrivalTime);
+        log.info("Vehicle conflict result: {}", vehicleConflict);
+
+        if (vehicleConflict) {
+            // Log chi tiết các chuyến bị conflict
+            List<Trip> conflictingTrips = tripRepository.findConflictingTripsForVehicle(
+                    request.getVehicleId(), departureTime, arrivalTime);
+            log.warn("Found {} conflicting trips for vehicle {}", conflictingTrips.size(), vehicle.getLicensePlate());
+            StringBuilder conflictDetails = new StringBuilder();
+            for (Trip t : conflictingTrips) {
+                log.warn("  - Trip {}: {} to {} (Status: {})",
+                        t.getTripId(), t.getDepartureTime(), t.getArrivalTime(), t.getStatus());
+                conflictDetails.append(String.format("Trip #%d (%s - %s)",
+                        t.getTripId(),
+                        t.getDepartureTime().toLocalDate(),
+                        t.getStatus()));
+            }
+            throw new BadRequestException(
+                    "Xe " + vehicle.getLicensePlate() + " đang bận! Xung đột với: " + conflictDetails);
+        }
+
+        boolean driverConflict = tripRepository.isPersonBusy(request.getDriverId(), departureTime, arrivalTime);
+        log.info("Driver conflict result: {}", driverConflict);
+
+        if (driverConflict) {
+            throw new BadRequestException(
+                    "Tài xế " + driver.getUser().getFullName() + " đang bận trong khung giờ này!");
+        }
+
+        if (subDriver != null) {
+            boolean subDriverConflict = tripRepository.isPersonBusy(subDriver.getDriverId(), departureTime,
+                    arrivalTime);
+            log.info("Sub-driver conflict result: {}", subDriverConflict);
+            if (subDriverConflict) {
+                throw new BadRequestException(
+                        "Phụ xe " + subDriver.getUser().getFullName() + " đang bận trong khung giờ này!");
+            }
+        }
+
+        log.info("No conflicts found. Creating trip...");
 
         Trip trip = new Trip();
         trip.setRoute(route);
@@ -386,6 +466,11 @@ public class TripService implements ITripService {
         Driver newDriver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
+        // Validate vehicle status
+        if (!"Operational".equalsIgnoreCase(newVehicle.getStatus())) {
+            throw new BadRequestException("Vehicle is not operational! Current status: " + newVehicle.getStatus());
+        }
+
         long ticketsSold = ticketRepository.countActiveTicketsByTripId(tripId);
         int newCapacity = newVehicle.getVehicleType().getTotalSeats();
 
@@ -402,6 +487,38 @@ public class TripService implements ITripService {
             }
             subDriver = driverRepository.findById(request.getSubDriverId())
                     .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
+        }
+
+        // Check vehicle conflict if vehicle changed (exclude current trip)
+        if (!trip.getVehicle().getVehicleId().equals(request.getVehicleId())) {
+            boolean vehicleConflict = tripRepository.existsByVehicleAndOverlapExcludingTrip(
+                    request.getVehicleId(), trip.getDepartureTime(), trip.getArrivalTime(), tripId);
+            if (vehicleConflict) {
+                throw new BadRequestException("Xe " + newVehicle.getLicensePlate() + " đang bận trong khung giờ này!");
+            }
+        }
+
+        // Check driver conflict if driver changed (exclude current trip)
+        if (!trip.getDriver().getDriverId().equals(request.getDriverId())) {
+            boolean driverConflict = tripRepository.isPersonBusyExcludingTrip(
+                    request.getDriverId(), trip.getDepartureTime(), trip.getArrivalTime(), tripId);
+            if (driverConflict) {
+                throw new BadRequestException(
+                        "Tài xế " + newDriver.getUser().getFullName() + " đang bận trong khung giờ này!");
+            }
+        }
+
+        // Check sub-driver conflict if sub-driver changed
+        if (subDriver != null) {
+            Integer currentSubDriverId = trip.getSubDriver() != null ? trip.getSubDriver().getDriverId() : null;
+            if (!subDriver.getDriverId().equals(currentSubDriverId)) {
+                boolean subDriverConflict = tripRepository.isPersonBusyExcludingTrip(
+                        subDriver.getDriverId(), trip.getDepartureTime(), trip.getArrivalTime(), tripId);
+                if (subDriverConflict) {
+                    throw new BadRequestException(
+                            "Phụ xe " + subDriver.getUser().getFullName() + " đang bận trong khung giờ này!");
+                }
+            }
         }
 
         trip.setVehicle(newVehicle);

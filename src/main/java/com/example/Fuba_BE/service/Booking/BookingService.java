@@ -188,7 +188,7 @@ public class BookingService implements IBookingService {
 
         User customer = null;
         boolean isGuest = Boolean.TRUE.equals(request.getIsGuestBooking());
-        
+
         if (!isGuest) {
             // If not guest booking, userId must be a valid customer ID
             try {
@@ -382,6 +382,47 @@ public class BookingService implements IBookingService {
         }
 
         log.info("Payment processed successfully for booking {}", booking.getBookingCode());
+        return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse bypassPayment(Integer bookingId) {
+        log.info("🔓 BYPASS PAYMENT: Processing instant payment for booking ID: {}", bookingId);
+
+        Booking booking = bookingRepository.findByIdWithLock(bookingId)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
+
+        // Allow bypass from Held or Pending status
+        if (!"Held".equals(booking.getBookingStatus()) && !"Pending".equals(booking.getBookingStatus())) {
+            throw new BadRequestException(
+                    "Booking không ở trạng thái Held hoặc Pending. Hiện tại: " + booking.getBookingStatus());
+        }
+
+        // Update booking status to Paid
+        booking.setBookingStatus("Paid");
+        // Set holdExpiry to current time (payment completed, no longer holding)
+        booking.setHoldExpiry(LocalDateTime.now());
+        booking = bookingRepository.save(booking);
+
+        // Update all tickets to Confirmed and seats to Booked
+        List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
+        for (Ticket ticket : tickets) {
+            ticket.setTicketStatus(TicketStatus.CONFIRMED.getDisplayName());
+            ticketRepository.save(ticket);
+
+            TripSeat seat = ticket.getSeat();
+            if (seat != null) {
+                if (!"Booked".equals(seat.getStatus())) {
+                    seat.book();
+                    tripSeatRepository.save(seat);
+                }
+                broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
+            }
+        }
+
+        log.info("✅ BYPASS PAYMENT: Successfully confirmed booking {} with {} tickets",
+                booking.getBookingCode(), tickets.size());
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 
@@ -989,11 +1030,11 @@ public class BookingService implements IBookingService {
         List<Integer> bookingIds = bookingPage.getContent().stream()
                 .map(Booking::getBookingId)
                 .collect(Collectors.toList());
-        
-        List<Ticket> allTickets = bookingIds.isEmpty() 
-                ? List.of() 
+
+        List<Ticket> allTickets = bookingIds.isEmpty()
+                ? List.of()
                 : ticketRepository.findByBookingIds(bookingIds);
-        
+
         // Group tickets by booking ID
         var ticketsByBookingId = allTickets.stream()
                 .collect(Collectors.groupingBy(ticket -> ticket.getBooking().getBookingId()));
@@ -1002,17 +1043,17 @@ public class BookingService implements IBookingService {
         List<Integer> ticketIds = allTickets.stream()
                 .map(Ticket::getTicketId)
                 .collect(Collectors.toList());
-        
+
         List<Passenger> allPassengers = ticketIds.isEmpty()
                 ? List.of()
                 : passengerRepository.findByTicketIds(ticketIds);
-        
+
         // Group passengers by ticket ID
         var passengersByTicketId = allPassengers.stream()
                 .collect(Collectors.toMap(
-                    passenger -> passenger.getTicket().getTicketId(),
-                    passenger -> passenger,
-                    (p1, p2) -> p1 // In case of duplicates, keep first
+                        passenger -> passenger.getTicket().getTicketId(),
+                        passenger -> passenger,
+                        (p1, p2) -> p1 // In case of duplicates, keep first
                 ));
 
         // Map to response
@@ -1090,8 +1131,9 @@ public class BookingService implements IBookingService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
-        // Build pageable with sort by departure time descending
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "trip.departureTime"));
+        // Build pageable - Upcoming sort ASC (nearest first), others sort DESC
+        Sort.Direction sortDirection = "Upcoming".equalsIgnoreCase(status) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, "trip.departureTime"));
 
         Page<Booking> bookingPage;
 
