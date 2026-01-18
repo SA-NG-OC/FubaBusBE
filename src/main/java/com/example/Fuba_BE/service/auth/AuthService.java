@@ -58,8 +58,7 @@ public class AuthService implements IAuthService {
 
     @Override
     @Transactional
-    public ApiResponse<AuthResponse> 
-    login(LoginRequest request) {
+    public ApiResponse<AuthResponse> login(LoginRequest request) {
         log.info("Login attempt for: {}", request.getEmailOrPhone());
 
         // Find user
@@ -72,8 +71,8 @@ public class AuthService implements IAuthService {
         // Check if account is locked
         if (user.isAccountLocked()) {
             auditService.logFailedLogin(request.getEmailOrPhone(), "Account is locked");
-            throw new LockedException("Account is locked until " + user.getAccountLockedUntil() + 
-                                     ". Please try again later or reset your password.");
+            throw new LockedException("Account is locked until " + user.getAccountLockedUntil() +
+                    ". Please try again later or reset your password.");
         }
 
         try {
@@ -81,9 +80,7 @@ public class AuthService implements IAuthService {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getEmailOrPhone(),
-                            request.getPassword()
-                    )
-            );
+                            request.getPassword()));
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
@@ -102,6 +99,7 @@ public class AuthService implements IAuthService {
                     .userId(user.getUserId())
                     .email(user.getEmail())
                     .fullName(user.getFullName())
+                    .avt(user.getAvt()) // Include avatar URL
                     .role(user.getRole().getRoleName())
                     .refreshToken(refreshToken.getToken())
                     .build();
@@ -113,23 +111,23 @@ public class AuthService implements IAuthService {
         } catch (BadCredentialsException e) {
             // Increment failed attempts
             user.incrementFailedAttempts();
-            
+
             if (user.getFailedLoginAttempts() >= maxFailedAttempts) {
                 user.lockAccount(lockDurationMinutes);
-                auditService.logAccountLocked(user.getUserId(), user.getEmail(), user.getPhoneNumber(), 
-                                             user.getFailedLoginAttempts());
+                auditService.logAccountLocked(user.getUserId(), user.getEmail(), user.getPhoneNumber(),
+                        user.getFailedLoginAttempts());
                 userRepository.save(user);
                 throw new UnauthorizedException("Account locked due to multiple failed login attempts. " +
-                                               "Account will be unlocked after " + lockDurationMinutes + " minutes.");
+                        "Account will be unlocked after " + lockDurationMinutes + " minutes.");
             }
 
             userRepository.save(user);
             int attemptsLeft = maxFailedAttempts - user.getFailedLoginAttempts();
-            auditService.logFailedLogin(request.getEmailOrPhone(), 
+            auditService.logFailedLogin(request.getEmailOrPhone(),
                     "Invalid credentials. Attempts left: " + attemptsLeft);
-            
-            throw new UnauthorizedException("Invalid email/phone or password. " + attemptsLeft + 
-                                           " attempts remaining before account lockout.");
+
+            throw new UnauthorizedException("Invalid email/phone or password. " + attemptsLeft +
+                    " attempts remaining before account lockout.");
         }
     }
 
@@ -182,8 +180,7 @@ public class AuthService implements IAuthService {
         String accessToken = tokenProvider.generateTokenFromUserId(
                 savedUser.getUserId(),
                 savedUser.getEmail(),
-                savedUser.getRole().getRoleName()
-        );
+                savedUser.getRole().getRoleName());
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(savedUser);
 
         AuthResponse response = AuthResponse.builder()
@@ -192,6 +189,7 @@ public class AuthService implements IAuthService {
                 .userId(savedUser.getUserId())
                 .email(savedUser.getEmail())
                 .fullName(savedUser.getFullName())
+                .avt(savedUser.getAvt()) // Include avatar URL
                 .role(savedUser.getRole().getRoleName())
                 .refreshToken(refreshToken.getToken())
                 .build();
@@ -218,13 +216,13 @@ public class AuthService implements IAuthService {
 
         // Determine if email or phone and send appropriate notification
         boolean isEmail = request.getEmailOrPhone().contains("@");
-        
+
         try {
             if (isEmail) {
                 emailService.sendPasswordResetEmail(user.getEmail(), resetToken);
                 auditService.logPasswordResetRequest(user.getEmail());
                 log.info("Password reset email sent to: {}", user.getEmail());
-                return ApiResponse.success("Password reset link sent to your email", 
+                return ApiResponse.success("Password reset link sent to your email",
                         "Check your email for reset instructions. Link expires in 1 hour.");
             } else {
                 // Generate 6-digit OTP for SMS
@@ -232,7 +230,7 @@ public class AuthService implements IAuthService {
                 smsService.sendPasswordResetSms(user.getPhoneNumber(), otp);
                 auditService.logPasswordResetRequest(user.getPhoneNumber());
                 log.info("Password reset OTP sent to: {}", user.getPhoneNumber());
-                return ApiResponse.success("Password reset OTP sent to your phone", 
+                return ApiResponse.success("Password reset OTP sent to your phone",
                         "Check your SMS for reset code. Code expires in 10 minutes.");
             }
         } catch (Exception e) {
@@ -271,8 +269,8 @@ public class AuthService implements IAuthService {
 
         auditService.logPasswordReset(user.getUserId(), user.getEmail());
         log.info("Password reset successful for user: {}", user.getEmail());
-        
-        return ApiResponse.success("Password reset successful", 
+
+        return ApiResponse.success("Password reset successful",
                 "You can now login with your new password");
     }
 
@@ -285,7 +283,8 @@ public class AuthService implements IAuthService {
         User user = userRepository.findAll().stream()
                 .filter(u -> token.equals(u.getResetToken()))
                 .findFirst()
-                .orElseThrow(() -> new BadRequestException("Invalid reset token. The link may have been used or is incorrect."));
+                .orElseThrow(() -> new BadRequestException(
+                        "Invalid reset token. The link may have been used or is incorrect."));
 
         // Check token expiry
         if (user.getResetTokenExpiry() == null || user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
@@ -293,7 +292,7 @@ public class AuthService implements IAuthService {
         }
 
         log.info("Reset token validated successfully for user: {}", user.getEmail());
-        return ApiResponse.success("Token is valid", 
+        return ApiResponse.success("Token is valid",
                 "Please proceed to reset your password using POST request with your new password.");
     }
 
@@ -312,8 +311,7 @@ public class AuthService implements IAuthService {
         String accessToken = tokenProvider.generateTokenFromUserId(
                 user.getUserId(),
                 user.getEmail(),
-                user.getRole().getRoleName()
-        );
+                user.getRole().getRoleName());
 
         // Optionally rotate refresh token (create new one and revoke old)
         refreshTokenService.revokeToken(refreshTokenStr);
@@ -325,13 +323,14 @@ public class AuthService implements IAuthService {
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
+                .avt(user.getAvt()) // Include avatar URL
                 .role(user.getRole().getRoleName())
                 .refreshToken(newRefreshToken.getToken())
                 .build();
 
         auditService.logRefreshToken(user.getUserId(), user.getEmail());
         log.info("Access token refreshed for user: {}", user.getEmail());
-        
+
         return ApiResponse.success("Token refreshed successfully", response);
     }
 }

@@ -27,7 +27,8 @@ public interface ITripService {
 
     void deleteTrip(Integer tripId);
 
-    Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable);
+    Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable);
 
     List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId);
 
@@ -45,6 +46,9 @@ public interface ITripService {
     TicketDetailResponseDTO getTicketDetail(Integer ticketId);
 
     void completeTrip(Integer tripId, CompleteTripRequestDTO request);
+
+    Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable);
 
     TripDetailedResponseDTO getTripDetailById(Integer tripId);
 }

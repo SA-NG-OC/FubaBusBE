@@ -187,13 +187,21 @@ public class BookingService implements IBookingService {
         String bookingCode = generateBookingCode();
 
         User customer = null;
-        if (!Boolean.TRUE.equals(request.getIsGuestBooking())) {
+        boolean isGuest = Boolean.TRUE.equals(request.getIsGuestBooking());
+        
+        if (!isGuest) {
+            // If not guest booking, userId must be a valid customer ID
             try {
                 Integer customerId = Integer.parseInt(request.getUserId());
-                customer = userRepository.findById(customerId).orElse(null);
+                customer = userRepository.findById(customerId)
+                        .orElseThrow(() -> new NotFoundException(
+                                "Không tìm thấy người dùng với ID: " + customerId + ". Vui lòng đăng nhập lại."));
+                log.info("Booking for authenticated user: {} (ID: {})", customer.getFullName(), customerId);
             } catch (NumberFormatException e) {
-                log.debug("User ID {} is not a valid customer ID, treating as guest", request.getUserId());
+                throw new BadRequestException("User ID không hợp lệ: " + request.getUserId());
             }
+        } else {
+            log.info("Creating guest booking with session ID: {}", request.getGuestSessionId());
         }
 
         Booking booking = Booking.builder()
@@ -206,8 +214,8 @@ public class BookingService implements IBookingService {
                 .totalAmount(totalAmount)
                 .bookingStatus("Held")
                 .bookingType("Online")
-                .isGuestBooking(customer == null)
-                .guestSessionId(customer == null ? request.getGuestSessionId() : null)
+                .isGuestBooking(isGuest)
+                .guestSessionId(isGuest ? request.getGuestSessionId() : null)
                 .holdExpiry(LocalDateTime.now().plusMinutes(15))
                 .build();
 
@@ -977,11 +985,41 @@ public class BookingService implements IBookingService {
                 filterRequest.getSearch(),
                 pageable);
 
+        // Batch fetch tickets for all bookings to avoid N+1 query
+        List<Integer> bookingIds = bookingPage.getContent().stream()
+                .map(Booking::getBookingId)
+                .collect(Collectors.toList());
+        
+        List<Ticket> allTickets = bookingIds.isEmpty() 
+                ? List.of() 
+                : ticketRepository.findByBookingIds(bookingIds);
+        
+        // Group tickets by booking ID
+        var ticketsByBookingId = allTickets.stream()
+                .collect(Collectors.groupingBy(ticket -> ticket.getBooking().getBookingId()));
+
+        // Batch fetch passengers for all tickets to avoid N+1 query
+        List<Integer> ticketIds = allTickets.stream()
+                .map(Ticket::getTicketId)
+                .collect(Collectors.toList());
+        
+        List<Passenger> allPassengers = ticketIds.isEmpty()
+                ? List.of()
+                : passengerRepository.findByTicketIds(ticketIds);
+        
+        // Group passengers by ticket ID
+        var passengersByTicketId = allPassengers.stream()
+                .collect(Collectors.toMap(
+                    passenger -> passenger.getTicket().getTicketId(),
+                    passenger -> passenger,
+                    (p1, p2) -> p1 // In case of duplicates, keep first
+                ));
+
         // Map to response
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
                 .map(booking -> {
-                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
-                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                    List<Ticket> tickets = ticketsByBookingId.getOrDefault(booking.getBookingId(), List.of());
+                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets, passengersByTicketId);
                 })
                 .collect(Collectors.toList());
 

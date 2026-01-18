@@ -241,4 +241,44 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
         @Param("search") String search,
         Pageable pageable
     );
+
+    /**
+     * Count query for pagination - required for DISTINCT with JOIN FETCH
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT b) FROM Booking b 
+        WHERE (:status IS NULL OR b.bookingStatus = :status)
+        AND (:search IS NULL OR :search = '' OR 
+             LOWER(b.bookingCode) LIKE LOWER(CONCAT('%', :search, '%')) OR
+             LOWER(b.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+             LOWER(b.customerPhone) LIKE LOWER(CONCAT('%', :search, '%')))
+    """)
+    long countAllWithFilters(
+        @Param("status") String status,
+        @Param("search") String search
+    );
+
+    /**
+     * Find bookings by IDs to preserve order and avoid JOIN FETCH in pagination
+     */
+    @Query("""
+        SELECT DISTINCT b FROM Booking b 
+        LEFT JOIN FETCH b.customer 
+        LEFT JOIN FETCH b.trip t
+        LEFT JOIN FETCH t.route
+        LEFT JOIN FETCH t.vehicle
+        LEFT JOIN FETCH t.driver
+        WHERE b.bookingId IN :ids
+    """)
+    List<Booking> findByIdsWithDetails(@Param("ids") List<Integer> ids);
+
+    /**
+     * Find bookings by status and updated before a specific time
+     * Used by payment scheduler to check pending/failed payments
+     */
+    @Query("SELECT b FROM Booking b WHERE b.bookingStatus = :status AND b.updatedAt < :threshold")
+    List<Booking> findByBookingStatusAndUpdatedAtBefore(
+        @Param("status") String status,
+        @Param("threshold") LocalDateTime threshold
+    );
 }

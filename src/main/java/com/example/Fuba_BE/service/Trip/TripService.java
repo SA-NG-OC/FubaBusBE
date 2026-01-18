@@ -55,6 +55,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@lombok.extern.slf4j.Slf4j
 public class TripService implements ITripService {
 
     private final TripRepository tripRepository;
@@ -70,10 +71,10 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-                                                     String search, Integer originId, Integer destId,
-                                                     Double minPrice, Double maxPrice, LocalDate date,
-                                                     List<String> timeRanges, List<String> vehicleTypes,
-                                                     Integer minAvailableSeats) {
+            String search, Integer originId, Integer destId,
+            Double minPrice, Double maxPrice, LocalDate date,
+            List<String> timeRanges, List<String> vehicleTypes,
+            Integer minAvailableSeats) {
 
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
@@ -113,7 +114,8 @@ public class TripService implements ITripService {
                 List<Predicate> timePredicates = new ArrayList<>();
 
                 // Fix: Dùng date_part thay vì function("hour")
-                Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"), root.get("departureTime"));
+                Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"),
+                        root.get("departureTime"));
                 Expression<Integer> hourExp = hourDouble.as(Integer.class);
 
                 for (String range : timeRanges) {
@@ -149,8 +151,7 @@ public class TripService implements ITripService {
                 sub.select(cb.count(subRoot));
                 sub.where(
                         cb.equal(subRoot.get("trip"), root),
-                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName())
-                );
+                        cb.equal(subRoot.get("status"), SeatStatus.Available.getDisplayName()));
                 predicates.add(cb.greaterThanOrEqualTo(sub, minAvailableSeats.longValue()));
             }
 
@@ -176,7 +177,7 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId,
-                                        Pageable pageable) {
+            Pageable pageable) {
         String filterStatus = StringUtils.hasText(status) ? status : null;
         LocalDateTime start = null;
         LocalDateTime end = null;
@@ -311,11 +312,27 @@ public class TripService implements ITripService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Trip> getTripsForDriver(Integer driverId, String status, Pageable pageable) {
-        if (!driverRepository.existsById(driverId))
+    public Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable) {
+        log.info("[TripService] Getting trips for driverId: {}, status: {}, startDate: {}, endDate: {}, page: {}",
+                driverId, status, startDate, endDate, pageable.getPageNumber());
+
+        if (!driverRepository.existsById(driverId)) {
+            log.error("[TripService] Driver not found with id: {}", driverId);
             throw new ResourceNotFoundException("Driver not found");
-        return tripRepository.findTripsByDriverOrSubDriver(driverId, StringUtils.hasText(status) ? status : null,
-                pageable);
+        }
+
+        String filterStatus = StringUtils.hasText(status) ? status : null;
+
+        // Convert LocalDate to LocalDateTime
+        java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
+
+        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(driverId, filterStatus, startDateTime,
+                endDateTime, pageable);
+
+        log.info("[TripService] Found {} trips for driver {}", trips.getTotalElements(), driverId);
+        return trips;
     }
 
     @Override
@@ -475,6 +492,38 @@ public class TripService implements ITripService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
+            Pageable pageable) {
+        log.info("[TripService] Getting trips for userId: {}, status: {}, startDate: {}, endDate: {}",
+                userId, status, startDate, endDate);
+
+        // Get driver by userId
+        Driver driver = driverRepository.findByUserId(userId)
+                .orElseThrow(() -> {
+                    log.error("[TripService] Driver profile not found for userId: {}", userId);
+                    return new ResourceNotFoundException("Driver profile not found for this user");
+                });
+
+        log.info("[TripService] Found driver with driverId: {} for userId: {}", driver.getDriverId(), userId);
+
+        // Convert LocalDate to LocalDateTime
+        java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
+
+        // Reuse existing method with driverId
+        String filterStatus = StringUtils.hasText(status) ? status : null;
+        Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(
+                driver.getDriverId(),
+                filterStatus,
+                startDateTime,
+                endDateTime,
+                pageable);
+
+        log.info("[TripService] Found {} trips for userId: {} (driverId: {})",
+                trips.getTotalElements(), userId, driver.getDriverId());
+        return trips;
+    }
+
     public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
         Trip trip = tripRepository.findById(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));

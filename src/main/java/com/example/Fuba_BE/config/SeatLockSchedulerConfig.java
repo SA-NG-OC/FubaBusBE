@@ -10,20 +10,18 @@ import com.example.Fuba_BE.service.ISeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
 
 /**
- * Scheduler configuration for automatic seat lock expiration and booking expiration.
+ * Scheduler component for automatic seat lock expiration and booking expiration.
  * Periodically checks for and releases expired seat locks and expires held bookings.
  */
-@Configuration
-@EnableScheduling
+@Component
 @RequiredArgsConstructor
 public class SeatLockSchedulerConfig {
     

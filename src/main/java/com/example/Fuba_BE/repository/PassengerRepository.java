@@ -49,6 +49,13 @@ public interface PassengerRepository extends JpaRepository<Passenger, Integer> {
        Optional<Passenger> findByTicketTicketId(Integer ticketId);
 
        /**
+        * Find all passengers for multiple tickets (batch fetch to avoid N+1)
+        */
+       @EntityGraph(attributePaths = { "pickupLocation", "dropoffLocation" })
+       @Query("SELECT p FROM Passenger p WHERE p.ticket.ticketId IN :ticketIds")
+       List<Passenger> findByTicketIds(@Param("ticketIds") List<Integer> ticketIds);
+
+       /**
         * Find all passengers for a trip with pickup/dropoff location info using
         * EntityGraph.
         */

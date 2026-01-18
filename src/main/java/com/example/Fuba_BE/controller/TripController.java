@@ -11,6 +11,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -32,6 +33,7 @@ import com.example.Fuba_BE.dto.Trip.TripStatusUpdateDTO;
 import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
 import com.example.Fuba_BE.mapper.TripMapper;
 import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.security.UserPrincipal;
 import com.example.Fuba_BE.service.Trip.ITripService;
 
 import jakarta.validation.Valid;
@@ -121,8 +123,26 @@ public class TripController {
     public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getDriverTrips(
             @PathVariable Integer driverId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false, defaultValue = "false") boolean today,
             @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
-        Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, pageable);
+
+        // Priority 1: If today=true, override all date params to today
+        if (today) {
+            LocalDate todayDate = LocalDate.now();
+            startDate = todayDate;
+            endDate = todayDate;
+        }
+        // Priority 2: If date is provided, use it for both start and end
+        else if (date != null) {
+            startDate = date;
+            endDate = date;
+        }
+        // Priority 3: Use startDate/endDate as provided (can be null)
+
+        Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, startDate, endDate, pageable);
         Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
         return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
     }
@@ -175,6 +195,60 @@ public class TripController {
             @Valid @RequestBody CompleteTripRequestDTO request) {
         tripService.completeTrip(tripId, request);
         return ResponseEntity.ok(ApiResponse.success("Trip completed successfully", null));
+    }
+
+    /**
+     * Get trips assigned to the currently authenticated driver
+     * Automatically retrieves trips for the logged-in driver without needing to
+     * pass driverId
+     * 
+     * Supports 3 modes:
+     * 1. Single date: ?date=2026-01-18
+     * 2. Date range: ?startDate=2026-01-18&endDate=2026-01-25
+     * 3. Today flag: ?today=true (overrides other params)
+     * 
+     * @param date      - filter trips for a specific date (sets
+     *                  startDate=endDate=date)
+     * @param today     - if true, returns only today's trips (overrides
+     *                  date/startDate/endDate)
+     * @param startDate - filter trips from this date (inclusive)
+     * @param endDate   - filter trips until this date (inclusive)
+     */
+    @GetMapping("/my-trips")
+    public ResponseEntity<ApiResponse<Page<TripDetailedResponseDTO>>> getMyTrips(
+            Authentication authentication,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false, defaultValue = "false") boolean today,
+            @PageableDefault(page = 0, size = 10, sort = "departureTime", direction = Sort.Direction.ASC) Pageable pageable) {
+
+        // Priority 1: If today=true, override all date params to today
+        if (today) {
+            LocalDate todayDate = LocalDate.now();
+            startDate = todayDate;
+            endDate = todayDate;
+        }
+        // Priority 2: If date is provided, use it for both start and end
+        else if (date != null) {
+            startDate = date;
+            endDate = date;
+        }
+        // Priority 3: Use startDate/endDate as provided (can be null)
+
+        Integer userId = extractUserId(authentication);
+        Page<Trip> tripPage = tripService.getMyTripsForDriver(userId, status, startDate, endDate, pageable);
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+        return ResponseEntity.ok(ApiResponse.success("My trips retrieved successfully", responsePage));
+    }
+
+    /**
+     * Extract user ID from authentication token
+     */
+    private Integer extractUserId(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        return userPrincipal.getUserId();
     }
 
     // [UPDATED] API lấy chi tiết chuyến xe theo ID
