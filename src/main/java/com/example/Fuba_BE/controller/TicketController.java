@@ -1,5 +1,6 @@
 package com.example.Fuba_BE.controller;
 
+import com.example.Fuba_BE.domain.entity.Ticket;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInRequestDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
@@ -8,6 +9,9 @@ import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.PdfService;
 import com.example.Fuba_BE.service.Ticket.ITicketService;
 import com.example.Fuba_BE.utils.QRCodeGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,6 +25,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/tickets")
@@ -102,20 +112,27 @@ public class TicketController {
         );
     }
 
-    @Operation(summary = "Generate QR Code", description = "Generates a QR code image linking to the ticket details")
+    @Operation(summary = "Generate QR Code")
     @GetMapping(value = "/{ticketCode}/qr", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> generateTicketQR(@PathVariable String ticketCode) {
         try {
-            // Lưu ý: Cập nhật domain thật khi deploy
-            String infoToEmbed = "http://127.0.0.1:5500/ticket.html?code=" + ticketCode;
+            String publicUrl = "http://127.0.0.1:5500/ticket.html";
+            String qrContent = publicUrl + "?ticketCode=" + ticketCode;
 
-            byte[] qrImage = QRCodeGenerator.generateQRCodeImage(infoToEmbed, 300, 300);
+            byte[] qrImage = QRCodeGenerator.generateQRCodeImage(qrContent, 300, 300);
 
             return ResponseEntity.ok().body(qrImage);
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    @Operation(summary = "Staff confirm ticket")
+    @PostMapping("/{ticketCode}/confirm")
+    public ResponseEntity<ApiResponse<Boolean>> confirmTicket(@PathVariable String ticketCode) {
+        boolean isSuccess = ticketService.confirmTicket(ticketCode);
+        return ResponseEntity.ok(ApiResponse.success("Soát vé thành công!", isSuccess));
     }
 
     @Operation(summary = "Export Ticket PDF", description = "Generate and download a PDF ticket with real data from DB")

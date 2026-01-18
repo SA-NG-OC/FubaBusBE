@@ -164,6 +164,33 @@ public class TicketService implements ITicketService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public boolean confirmTicket(String ticketCode) {
+        // 1. Tìm vé
+        Ticket ticket = ticketRepository.findByTicketCode(ticketCode)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy vé: " + ticketCode));
+
+        // 2. Lấy trạng thái hiện tại
+        String currentStatus = ticket.getTicketStatus();
+
+        // 3. Logic kiểm tra
+        if ("Confirmed".equals(currentStatus)) {
+            ticket.setTicketStatus("Used"); // Chuyển sang đã sử dụng
+            ticketRepository.save(ticket);
+            return true; // Trả về true báo hiệu thành công
+        }
+
+        // 4. Các trường hợp lỗi thì ném ngoại lệ để Controller hoặc GlobalExceptionHandler bắt
+        else if ("Used".equals(currentStatus)) {
+            throw new RuntimeException("Vé này đã được sử dụng trước đó (Check-in rồi).");
+        } else if ("Unconfirmed".equals(currentStatus)) {
+            throw new RuntimeException("Vé chưa được thanh toán/xác nhận.");
+        } else {
+            throw new RuntimeException("Vé không hợp lệ để soát. Trạng thái: " + currentStatus);
+        }
+    }
+
     // --- Private Validators & Helpers ---
 
     private void validateTicketForCheckIn(Ticket ticket) {
