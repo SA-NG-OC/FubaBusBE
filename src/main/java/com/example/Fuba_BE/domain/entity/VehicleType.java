@@ -1,16 +1,25 @@
 package com.example.Fuba_BE.domain.entity;
 
-import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "vehicletypes")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class VehicleType {
 
     @Id
@@ -25,6 +34,7 @@ public class VehicleType {
     private Integer totalSeats;
 
     @Column(name = "numberoffloors")
+    @Builder.Default
     private Integer numberOfFloors = 1;
 
     @Column(name = "description", columnDefinition = "TEXT")
