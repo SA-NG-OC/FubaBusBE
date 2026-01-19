@@ -3,11 +3,15 @@ package com.example.Fuba_BE.service.Vehicle;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.Fuba_BE.config.CacheConfig;
 import com.example.Fuba_BE.domain.entity.VehicleType;
 import com.example.Fuba_BE.dto.Vehicle.VehicleTypeRequestDTO;
 import com.example.Fuba_BE.dto.Vehicle.VehicleTypeResponseDTO;
@@ -33,8 +37,9 @@ public class VehicleTypeService implements IVehicleTypeService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_VEHICLE_TYPES_ALL)
     public List<VehicleTypeResponseDTO> getAllVehicleTypesForSelection() {
-        log.debug("📥 Fetching all vehicle types for selection");
+        log.debug("📥 Cache MISS - Fetching all vehicle types for selection from database");
         List<VehicleType> vehicleTypes = vehicleTypeRepository.findAll();
         return vehicleTypes.stream()
                 .map(this::mapToResponseDTO)
@@ -42,8 +47,9 @@ public class VehicleTypeService implements IVehicleTypeService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_VEHICLE_TYPES, key = "#id")
     public VehicleTypeResponseDTO getVehicleTypeById(Integer id) {
-        log.debug("📥 Fetching vehicle type by ID: {}", id);
+        log.debug("📥 Cache MISS - Fetching vehicle type by ID: {}", id);
         VehicleType vehicleType = vehicleTypeRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Vehicle type not found with ID: " + id));
         return mapToResponseDTO(vehicleType);
@@ -51,6 +57,7 @@ public class VehicleTypeService implements IVehicleTypeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = CacheConfig.CACHE_VEHICLE_TYPES_ALL, allEntries = true)
     public VehicleTypeResponseDTO createVehicleType(VehicleTypeRequestDTO request) {
         log.info("📥 Creating new vehicle type: {}", request.getTypeName());
 
@@ -69,6 +76,10 @@ public class VehicleTypeService implements IVehicleTypeService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_VEHICLE_TYPES, key = "#id"),
+            @CacheEvict(value = CacheConfig.CACHE_VEHICLE_TYPES_ALL, allEntries = true)
+    })
     public VehicleTypeResponseDTO updateVehicleType(Integer id, VehicleTypeRequestDTO request) {
         log.info("📥 Updating vehicle type ID: {}", id);
 
@@ -88,6 +99,10 @@ public class VehicleTypeService implements IVehicleTypeService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_VEHICLE_TYPES, key = "#id"),
+            @CacheEvict(value = CacheConfig.CACHE_VEHICLE_TYPES_ALL, allEntries = true)
+    })
     public void deleteVehicleType(Integer id) {
         log.info("📥 Deleting vehicle type ID: {}", id);
 

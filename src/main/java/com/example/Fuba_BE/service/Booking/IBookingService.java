@@ -53,10 +53,20 @@ public interface IBookingService {
      * Changes booking status from Held to Paid and seats from Held to Booked.
      *
      * @param bookingId      The booking ID to process payment for
-     * @param paymentDetails Payment details (Map for flexibility with different gateways)
+     * @param paymentDetails Payment details (Map for flexibility with different
+     *                       gateways)
      * @return Updated BookingResponse with Paid status
      */
     BookingResponse processPayment(Integer bookingId, Map<String, Object> paymentDetails);
+
+    /**
+     * Bypass payment - immediately confirm booking and create tickets.
+     * For testing/demo purposes only. Skips actual payment gateway.
+     *
+     * @param bookingId The booking ID to confirm
+     * @return BookingResponse with confirmed tickets
+     */
+    BookingResponse bypassPayment(Integer bookingId);
 
     /**
      * Get booking by ID
@@ -149,7 +159,8 @@ public interface IBookingService {
     /**
      * Get all bookings with pagination and filtering.
      *
-     * @param filterRequest BookingFilterRequest with page, size, status, search, sortBy, sortDirection
+     * @param filterRequest BookingFilterRequest with page, size, status, search,
+     *                      sortBy, sortDirection
      * @return BookingPageResponse with paginated bookings
      */
     BookingPageResponse getAllBookings(BookingFilterRequest filterRequest);
@@ -167,7 +178,8 @@ public interface IBookingService {
      * Returns tickets ordered by departure time.
      *
      * @param userId User ID from authentication
-     * @param status Optional booking status filter (Held, Paid, Cancelled, Completed)
+     * @param status Optional booking status filter (Held, Paid, Cancelled,
+     *               Completed)
      * @param page   Page number (0-indexed)
      * @param size   Page size
      * @return BookingPageResponse with paginated bookings

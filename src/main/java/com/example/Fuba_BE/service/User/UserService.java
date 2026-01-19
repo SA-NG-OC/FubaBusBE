@@ -24,6 +24,7 @@ import com.example.Fuba_BE.exception.UnauthorizedException;
 import com.example.Fuba_BE.mapper.UserMapper;
 import com.example.Fuba_BE.repository.RoleRepository;
 import com.example.Fuba_BE.repository.UserRepository;
+import com.example.Fuba_BE.service.AuditLog.IAuditLogService;
 import com.example.Fuba_BE.service.CloudinaryService;
 
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class UserService implements IUserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final CloudinaryService cloudinaryService;
+    private final IAuditLogService auditLogService;
 
     @Override
     public UserResponseDTO createUserByAdmin(CreateUserByAdminRequest request) {
@@ -224,10 +226,23 @@ public class UserService implements IUserService {
                     return new ResourceNotFoundException("User not found with ID: " + userId);
                 });
 
+        String oldStatus = user.getStatus();
         user.setStatus(status);
 
         User updatedUser = userRepository.save(user);
         log.info("✅ User status updated successfully for ID: {}", userId);
+
+        // Log customer status update for audit trail
+        if (user.getRole() != null && "USER".equals(user.getRole().getRoleName())) {
+            // Note: In a real scenario, we'd get the admin ID from SecurityContext
+            // For now, we log the action without admin ID
+            try {
+                auditLogService.logAction(userId, "CUSTOMER_STATUS_UPDATED", "users", userId,
+                        oldStatus, status, null);
+            } catch (Exception e) {
+                log.warn("Failed to log customer status update audit: {}", e.getMessage());
+            }
+        }
 
         return userMapper.toResponseDTO(updatedUser);
     }
@@ -497,5 +512,18 @@ public class UserService implements IUserService {
         ProfileResponseDTO response = userMapper.toProfileResponseDTO(user);
         response.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
         return response;
+    }
+
+    // --- Customer Management (Admin) ---
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponseDTO> getCustomers(String search, String status, Pageable pageable) {
+        log.info("📥 Getting customers - search: {}, status: {}", search, status);
+
+        Page<User> customers = userRepository.searchCustomers(search, status, pageable);
+
+        log.info("✅ Found {} customers", customers.getTotalElements());
+        return customers.map(userMapper::toResponseDTO);
     }
 }

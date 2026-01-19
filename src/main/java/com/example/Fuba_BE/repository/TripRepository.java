@@ -46,28 +46,30 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
     List<Object[]> getWeeklyTicketSales();
 
     // 3. Hàm cho DashboardService (Dòng 98 bị lỗi - List hôm nay)
+    // Incoming version: Thêm filter routeId - linh hoạt hơn
     @Query(value = """
-    SELECT t,
-    (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
-    FROM Trip t
-    LEFT JOIN FETCH t.route r
-    LEFT JOIN FETCH r.origin o
-    LEFT JOIN FETCH r.destination d
-    LEFT JOIN FETCH t.vehicle v
-    LEFT JOIN FETCH v.vehicleType vt
-    WHERE t.departureTime BETWEEN :start AND :end
-    AND (:routeId IS NULL OR r.routeId = :routeId) 
-""",
-            countQuery = """
-    SELECT COUNT(t) FROM Trip t
-    LEFT JOIN t.route r 
-    WHERE t.departureTime BETWEEN :start AND :end
-    AND (:routeId IS NULL OR r.routeId = :routeId)
-""")
+            SELECT t,
+            (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
+            FROM Trip t
+            LEFT JOIN FETCH t.route r
+            LEFT JOIN FETCH r.origin o
+            LEFT JOIN FETCH r.destination d
+            LEFT JOIN FETCH t.vehicle v
+            LEFT JOIN FETCH v.vehicleType vt
+            WHERE 
+            ((:start IS NULL AND :end IS NULL) OR (t.departureTime BETWEEN :start AND :end))
+            AND (:routeId IS NULL OR r.routeId = :routeId)
+        """, countQuery = """
+            SELECT COUNT(t) FROM Trip t
+            LEFT JOIN t.route r
+            WHERE 
+            ((:start IS NULL AND :end IS NULL) OR (t.departureTime BETWEEN :start AND :end))
+            AND (:routeId IS NULL OR r.routeId = :routeId)
+        """)
     Page<Object[]> findTripsWithBookingCount(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
-            @Param("routeId") Integer routeId, // <--- Thêm tham số này
+            @Param("routeId") Integer routeId,
             Pageable pageable);
 
     // =========================================================================
@@ -81,6 +83,20 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
     // Đếm Checked-in
     @Query("SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip.tripId = :tripId AND LOWER(ts.status) IN ('checkedin', 'used', 'checked-in')")
     int countCheckedInSeats(@Param("tripId") Integer tripId);
+
+    // Find trip by ID with all details (eager loading for driver, vehicle, route)
+    @Query("SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "LEFT JOIN FETCH t.driver d " +
+            "LEFT JOIN FETCH d.user " +
+            "LEFT JOIN FETCH t.subDriver sd " +
+            "LEFT JOIN FETCH sd.user " +
+            "LEFT JOIN FETCH t.vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType " +
+            "WHERE t.tripId = :tripId")
+    java.util.Optional<Trip> findByIdWithDetails(@Param("tripId") Integer tripId);
 
     // =========================================================================
     // PHẦN 3: CÁC HÀM CƠ BẢN & FILTER (ĐÃ FIX LAZY LOAD)
@@ -117,7 +133,8 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
                     "AND (CAST(:originId AS integer) IS NULL OR r.origin.locationId = :originId) " +
                     "AND (CAST(:destId AS integer) IS NULL OR r.destination.locationId = :destId)")
     Page<Trip> findTripsWithFilter(@Param("status") String status, @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end, @Param("originId") Integer originId, @Param("destId") Integer destId,
+            @Param("end") LocalDateTime end, @Param("originId") Integer originId,
+            @Param("destId") Integer destId,
             Pageable pageable);
 
     @Modifying
@@ -136,19 +153,34 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
                 SELECT COUNT(t) FROM Trip t
                 WHERE t.departureTime BETWEEN :start AND :end
             """)
-    Page<Trip> findTripsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end, Pageable pageable);
+    Page<Trip> findTripsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+            Pageable pageable);
 
     // =========================================================================
     // PHẦN 4: CHECK TRÙNG & ANALYTICS CÒN LẠI
     // =========================================================================
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status != 'Cancelled' AND ((t.departureTime < :endTime) AND (t.arrivalTime > :startTime))")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
     boolean existsByVehicleAndOverlap(@Param("vehicleId") Integer vehicleId,
             @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND t.status != 'Cancelled' AND ((t.departureTime < :endTime) AND (t.arrivalTime > :startTime))")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
+    boolean existsByVehicleAndOverlapExcludingTrip(@Param("vehicleId") Integer vehicleId,
+            @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime,
+            @Param("excludeTripId") Integer excludeTripId);
+
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
+    List<Trip> findConflictingTripsForVehicle(@Param("vehicleId") Integer vehicleId,
+            @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
+
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
     boolean isPersonBusy(@Param("personId") Integer personId, @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
+
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
+    boolean isPersonBusyExcludingTrip(@Param("personId") Integer personId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime, @Param("excludeTripId") Integer excludeTripId);
 
     @Query("""
                 SELECT DISTINCT t FROM Trip t
@@ -174,10 +206,6 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
             @Param("startDate") java.time.LocalDateTime startDate,
             @Param("endDate") java.time.LocalDateTime endDate,
             Pageable pageable);
-
-    long countByDepartureTimeBetween(LocalDateTime start, LocalDateTime end);
-
-    long countByDepartureTimeBetweenAndStatus(LocalDateTime start, LocalDateTime end, String status);
 
     @Query("SELECT COALESCE(SUM(t.basePrice), 0) FROM Trip t WHERE t.departureTime BETWEEN :start AND :end AND t.status != 'Cancelled'")
     BigDecimal sumRevenueByTimeRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
@@ -212,17 +240,21 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
 
     /**
      * Check if trip exists with same route and departure time
+     * Only check against active trips (Waiting, Running)
      */
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.route.routeId = :routeId AND t.departureTime = :departureTime AND t.status != 'Cancelled'")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.route.routeId = :routeId " +
+            "AND t.departureTime = :departureTime " +
+            "AND t.status IN ('Waiting', 'Running')")
     boolean existsByRouteAndDepartureTime(@Param("routeId") Integer routeId,
             @Param("departureTime") LocalDateTime departureTime);
 
     /**
      * Check if driver has time conflict (for trip generation)
+     * Only check against active trips (Waiting, Running)
      */
     @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId) "
             +
-            "AND t.status != 'Cancelled' " +
+            "AND t.status IN ('Waiting', 'Running') " +
             "AND ((t.departureTime < :endTime AND t.arrivalTime > :startTime))")
     boolean existsByDriverAndTimeOverlap(@Param("driverId") Integer driverId,
             @Param("startTime") LocalDateTime startTime,
@@ -230,9 +262,10 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
 
     /**
      * Check if vehicle has time conflict (for trip generation)
+     * Only check against active trips (Waiting, Running)
      */
     @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId " +
-            "AND t.status != 'Cancelled' " +
+            "AND t.status IN ('Waiting', 'Running') " +
             "AND ((t.departureTime < :endTime AND t.arrivalTime > :startTime))")
     boolean existsByVehicleAndTimeOverlap(@Param("vehicleId") Integer vehicleId,
             @Param("startTime") LocalDateTime startTime,
@@ -240,26 +273,64 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
 
     /**
      * Get all trips for a driver on specific date (for calculating working hours)
+     * Includes Waiting, Running, Completed trips for accurate work hour calculation
      */
     @Query("SELECT t FROM Trip t WHERE (t.driver.driverId = :driverId OR t.subDriver.driverId = :driverId) " +
             "AND DATE(t.departureTime) = :date " +
-            "AND t.status != 'Cancelled' " +
+            "AND t.status IN ('Waiting', 'Running', 'Completed') " +
             "ORDER BY t.departureTime ASC")
     List<Trip> findTripsByDriverAndDate(@Param("driverId") Integer driverId, @Param("date") LocalDate date);
 
-    // 1. Hàm chỉ lấy ID (trả về List ID) dùng cho Bước 1
-// Lưu ý: Không dùng JOIN FETCH ở đây
-    @Query("SELECT t.tripId FROM Trip t " +
-            "JOIN t.route r " +
-            "JOIN t.vehicle v " +
-            "JOIN v.vehicleType vt " +
-            "WHERE (:status IS NULL OR t.status = :status) " +
-            // ... các điều kiện filter khác ...
-            "")
-    Page<Integer> findTripIds(@Param("status") String status, Pageable pageable);
-// (Thực tế bạn có thể dùng Specification<Trip> nhưng chỉ select root.get("tripId"))
+    /**
+     * Find all trips with "Waiting" status whose departure time has passed
+     * Used by scheduled task to automatically cancel expired trips
+     */
+    @Query("SELECT t FROM Trip t WHERE t.status = 'Waiting' " +
+            "AND t.departureTime < :now " +
+            "ORDER BY t.departureTime ASC")
+    List<Trip> findExpiredWaitingTrips(@Param("now") LocalDateTime now);
 
+    // =========================================================================
+    // PHẦN 6: BATCH QUERIES TO AVOID N+1 (OPTIMIZED - 1 query for all statuses)
+    // =========================================================================
 
+    /**
+     * Batch count booked seats for multiple trips in ONE query.
+     * Returns array of [tripId, count] for each trip.
+     * Much more efficient than calling countBookedSeats() in a loop.
+     */
+    @Query("SELECT ts.trip.tripId, COUNT(ts) FROM TripSeat ts " +
+            "WHERE ts.trip.tripId IN :tripIds " +
+            "AND LOWER(ts.status) IN ('booked', 'sold', 'reserved', 'paid') " +
+            "GROUP BY ts.trip.tripId")
+    List<Object[]> batchCountBookedSeats(@Param("tripIds") List<Integer> tripIds);
+
+    /**
+     * Batch count checked-in seats for multiple trips in ONE query.
+     * Returns array of [tripId, count] for each trip.
+     */
+    @Query("SELECT ts.trip.tripId, COUNT(ts) FROM TripSeat ts " +
+            "WHERE ts.trip.tripId IN :tripIds " +
+            "AND LOWER(ts.status) IN ('checkedin', 'used', 'checked-in') " +
+            "GROUP BY ts.trip.tripId")
+    List<Object[]> batchCountCheckedInSeats(@Param("tripIds") List<Integer> tripIds);
+
+    /**
+     * MOST OPTIMIZED: Get ALL seat statuses in ONE single query
+     * Returns [tripId, status (lowercase), count] for each trip-status combination
+     * Better than batchCountBookedSeats + batchCountCheckedInSeats (2 queries → 1
+     * query)
+     */
+    @Query("SELECT ts.trip.tripId, LOWER(ts.status), COUNT(ts) " +
+            "FROM TripSeat ts " +
+            "WHERE ts.trip.tripId IN :tripIds " +
+            "GROUP BY ts.trip.tripId, LOWER(ts.status)")
+    List<Object[]> countSeatStatusByTripIds(@Param("tripIds") List<Integer> tripIds);
+
+    /**
+     * Fetch trip details by list of IDs with eager loading
+     * Used in 2-phase query pattern: 1) Get IDs → 2) Eager load details
+     */
     @Query("SELECT DISTINCT t FROM Trip t " +
             "LEFT JOIN FETCH t.route r " +
             "LEFT JOIN FETCH r.origin " +
@@ -272,10 +343,4 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
             "LEFT JOIN FETCH sd.user " +
             "WHERE t.tripId IN :ids")
     List<Trip> findTripsDetailByIds(@Param("ids") List<Integer> ids);
-
-    @Query("SELECT ts.trip.tripId, LOWER(ts.status), COUNT(ts) " +
-            "FROM TripSeat ts " +
-            "WHERE ts.trip.tripId IN :tripIds " +
-            "GROUP BY ts.trip.tripId, LOWER(ts.status)")
-    List<Object[]> countSeatStatusByTripIds(@Param("tripIds") List<Integer> tripIds);
 }

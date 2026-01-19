@@ -1,11 +1,22 @@
 package com.example.Fuba_BE.domain.entity;
 
-import jakarta.persistence.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "vehicles")
@@ -33,7 +44,7 @@ public class Vehicle {
     private LocalDate insuranceExpiry;
 
     @Column(name = "status")
-    private String status = "Hoàn thiện";
+    private String status = "Operational";
 
     @Column(name = "createdat")
     private LocalDateTime createdAt;

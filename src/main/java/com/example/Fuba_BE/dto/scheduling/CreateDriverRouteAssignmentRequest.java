@@ -1,12 +1,16 @@
 package com.example.Fuba_BE.dto.scheduling;
 
-import jakarta.validation.constraints.*;
+import java.time.LocalDate;
+
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDate;
 
 /**
  * DTO for creating driver-route assignment
@@ -29,6 +33,7 @@ public class CreateDriverRouteAssignmentRequest {
 
     @Min(value = 1, message = "Priority must be at least 1")
     @Max(value = 10, message = "Priority must not exceed 10")
+    @Builder.Default
     private Integer priority = 1;
 
     @NotNull(message = "Start date is required")
