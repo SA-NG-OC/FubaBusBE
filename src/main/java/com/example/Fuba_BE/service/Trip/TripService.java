@@ -337,15 +337,18 @@ public class TripService implements ITripService {
             }
         }
 
-        Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() / 60 : 5.0;
-        LocalDateTime arrivalTime = departureTime.plusMinutes((long) (durationHours * 60));
+        // Route.estimatedDuration is stored in MINUTES in database
+        int durationMinutes = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 300; // default 5
+                                                                                                         // hours
+        double durationHours = durationMinutes / 60.0;
+        LocalDateTime arrivalTime = departureTime.plusMinutes(durationMinutes);
 
         // Log kiểm tra conflict
         log.info("=== CHECKING CONFLICTS ===");
         log.info("Vehicle ID: {}, License: {}", vehicle.getVehicleId(), vehicle.getLicensePlate());
         log.info("Departure: {}", departureTime);
         log.info("Arrival: {}", arrivalTime);
-        log.info("Duration: {} hours", durationHours);
+        log.info("Duration: {} minutes ({} hours)", durationMinutes, durationHours);
 
         boolean vehicleConflict = tripRepository.existsByVehicleAndOverlap(request.getVehicleId(), departureTime,
                 arrivalTime);
@@ -373,6 +376,15 @@ public class TripService implements ITripService {
         log.info("Driver conflict result: {}", driverConflict);
 
         if (driverConflict) {
+            // Log chi tiết các chuyến bị conflict cho driver
+            List<Trip> conflictingDriverTrips = tripRepository.findConflictingTripsForPerson(
+                    request.getDriverId(), departureTime, arrivalTime);
+            log.warn("Found {} conflicting trips for driver {}", conflictingDriverTrips.size(),
+                    driver.getUser().getFullName());
+            for (Trip t : conflictingDriverTrips) {
+                log.warn("  - Trip {}: {} to {} (Status: {})",
+                        t.getTripId(), t.getDepartureTime(), t.getArrivalTime(), t.getStatus());
+            }
             throw new BadRequestException(
                     "Tài xế " + driver.getUser().getFullName() + " đang bận trong khung giờ này!");
         }
@@ -382,6 +394,15 @@ public class TripService implements ITripService {
                     arrivalTime);
             log.info("Sub-driver conflict result: {}", subDriverConflict);
             if (subDriverConflict) {
+                // Log chi tiết các chuyến bị conflict cho sub-driver
+                List<Trip> conflictingSubDriverTrips = tripRepository.findConflictingTripsForPerson(
+                        subDriver.getDriverId(), departureTime, arrivalTime);
+                log.warn("Found {} conflicting trips for sub-driver {}", conflictingSubDriverTrips.size(),
+                        subDriver.getUser().getFullName());
+                for (Trip t : conflictingSubDriverTrips) {
+                    log.warn("  - Trip {}: {} to {} (Status: {})",
+                            t.getTripId(), t.getDepartureTime(), t.getArrivalTime(), t.getStatus());
+                }
                 throw new BadRequestException(
                         "Phụ xe " + subDriver.getUser().getFullName() + " đang bận trong khung giờ này!");
             }
