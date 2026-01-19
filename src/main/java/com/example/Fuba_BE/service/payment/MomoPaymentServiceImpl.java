@@ -67,15 +67,19 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
         Booking booking = bookingRepository.findByIdWithLock(bookingId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
 
-        if (!"Held".equals(booking.getBookingStatus())) {
-            throw new BadRequestException("Booking không ở trạng thái Held. Hiện tại: " + booking.getBookingStatus());
+        // Allow payment for Held or Pending bookings
+        if (!"Held".equals(booking.getBookingStatus()) && !"Pending".equals(booking.getBookingStatus())) {
+            throw new BadRequestException(
+                "Booking phải ở trạng thái Held hoặc Pending để thanh toán. Hiện tại: " + booking.getBookingStatus());
         }
 
         // 2. Generate unique request ID and prepare payment data
         String requestId = UUID.randomUUID().toString();
-        String orderId = booking.getBookingCode();
+        // Generate unique orderId by appending timestamp to allow retry payments
+        // Format: BK20260119021-1737285600123
+        String orderId = booking.getBookingCode() + "-" + System.currentTimeMillis();
         String amount = booking.getTotalAmount().toBigInteger().toString();
-        String orderInfo = "Thanh toan ve xe - " + orderId;
+        String orderInfo = "Thanh toan ve xe - " + booking.getBookingCode(); // Keep original code in description
         String extraData = ""; // Can encode additional data in base64 if needed
         String lang = "vi";
 
@@ -212,12 +216,16 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
 
         // 2. Find booking by order ID (booking code) WITH PESSIMISTIC LOCK to prevent
         // race conditions
-        log.debug("Looking for booking with code: {}", ipnRequest.getOrderId());
-        Booking booking = bookingRepository.findByBookingCodeWithLock(ipnRequest.getOrderId())
+        // Extract booking code from orderId (format: BK20260119021-1737285600123)
+        String orderId = ipnRequest.getOrderId();
+        String bookingCode = orderId.contains("-") ? orderId.substring(0, orderId.lastIndexOf("-")) : orderId;
+        
+        log.debug("Looking for booking with code: {} (from orderId: {})", bookingCode, orderId);
+        Booking booking = bookingRepository.findByBookingCodeWithLock(bookingCode)
                 .orElse(null);
 
         if (booking == null) {
-            log.error("❌ Booking not found for orderId: {}", ipnRequest.getOrderId());
+            log.error("❌ Booking not found for bookingCode: {} (orderId: {})", bookingCode, orderId);
             return false;
         }
 
@@ -256,7 +264,8 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
                     return false;
                 }
 
-                log.debug("Checking seat {}: current status = {}", seat.getSeatNumber(), seat.getStatus());
+                log.info("🔍 Checking seat {}: current status = {}, lockedBy = {}", 
+                    seat.getSeatNumber(), seat.getStatus(), seat.getLockedBy());
 
                 // Check if seat is already Booked (idempotency - payment already processed)
                 if ("Booked".equals(seat.getStatus())) {
@@ -266,12 +275,24 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
                 
                 allSeatsAlreadyBooked = false;
 
-                // Critical check: seat must be Held (if not already Booked)
-                if (!"Held".equals(seat.getStatus())) {
+                // Critical check: seat must be Held OR Available (if seat was released due to expiry but payment came through)
+                // We accept Available seats if the booking is still Pending (user paid before complete expiration)
+                if (!"Held".equals(seat.getStatus()) && !"Available".equals(seat.getStatus()) && !"Booked".equals(seat.getStatus())) {
                     log.error(
-                            "❌ Seat {} status is {} (expected Held or Booked) for booking {}. Payment rejected to prevent double booking.",
+                            "❌ Seat {} status is {} (expected Held, Available, or Booked) for booking {}. Payment rejected to prevent double booking.",
                             seat.getSeatNumber(), seat.getStatus(), booking.getBookingCode());
                     return false;
+                }
+                
+                // If seat is Available, re-lock it before booking to prevent race condition
+                if ("Available".equals(seat.getStatus())) {
+                    log.warn("⚠️ Seat {} was Available (likely expired), re-locking for booking {} before payment completion", 
+                        seat.getSeatNumber(), booking.getBookingCode());
+                    // Re-lock the seat temporarily (will be converted to Booked immediately)
+                    seat.setStatus("Held");
+                    seat.setLockedBy(booking.getCustomerName() != null ? booking.getCustomerName() : "System");
+                    seat.setHoldExpiry(LocalDateTime.now().plusMinutes(1)); // Short lock
+                    tripSeatRepository.save(seat);
                 }
 
                 log.debug("✅ Seat {} validation passed", seat.getSeatNumber());
@@ -286,12 +307,20 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             log.info("All {} seats validated successfully for booking {}", tickets.size(), booking.getBookingCode());
 
             // 4. Update booking status to Paid
-            booking.setBookingStatus("Paid");
-            // Keep holdExpiry as-is (database constraint NOT NULL)
-            booking.setUpdatedAt(LocalDateTime.now());
-            bookingRepository.save(booking);
+            try {
+                String oldStatus = booking.getBookingStatus();
+                booking.setBookingStatus("Paid");
+                // Keep holdExpiry as-is (database constraint NOT NULL)
+                booking.setUpdatedAt(LocalDateTime.now());
+                booking = bookingRepository.save(booking);
 
-            log.info("✅ Booking {} status updated to Paid", booking.getBookingCode());
+                log.info("✅ Booking {} status updated: {} → Paid (saved ID: {})", 
+                    booking.getBookingCode(), oldStatus, booking.getBookingId());
+            } catch (Exception e) {
+                log.error("❌ CRITICAL: Failed to save booking {} as Paid: {}", 
+                    booking.getBookingCode(), e.getMessage(), e);
+                throw e; // Re-throw to rollback transaction
+            }
 
             // 5. Update tickets and seats
             for (Ticket ticket : tickets) {

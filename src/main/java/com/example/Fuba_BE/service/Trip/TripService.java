@@ -75,31 +75,38 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-                                                     String search, Integer originId, Integer destId,
-                                                     Double minPrice, Double maxPrice, LocalDate date,
-                                                     List<String> timeRanges, List<String> vehicleTypes,
-                                                     Integer minAvailableSeats, List<String> statuses) {
+            String search, Integer originId, Integer destId, Integer routeId,
+            Double minPrice, Double maxPrice, LocalDate date,
+            List<String> timeRanges, List<String> vehicleTypes,
+            Integer minAvailableSeats, List<String> statuses) {
 
+        // --- 1. SETUP PAGEABLE ---
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
                 : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
+        // --- 2. TẠO SPECIFICATION (FILTER) ---
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
+            // Filter by status list (default: Waiting, Running)
             if (statuses != null && !statuses.isEmpty()) {
                 predicates.add(root.get("status").in(statuses));
             }
 
+            // Also filter: departureTime must be in the future (only for Waiting status)
+            // For Running/Completed, we don't filter by time
             if (statuses != null && statuses.size() == 1 && statuses.contains("Waiting")) {
                 predicates.add(cb.greaterThan(root.get("departureTime"), LocalDateTime.now()));
             }
 
+            // Search by Route Name
             if (search != null && !search.isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("route").get("routeName")), "%" + search.toLowerCase() + "%"));
             }
 
+            // 2.2 Location
             if (originId != null) {
                 predicates.add(cb.equal(root.get("route").get("origin").get("locationId"), originId));
             }
@@ -107,6 +114,11 @@ public class TripService implements ITripService {
                 predicates.add(cb.equal(root.get("route").get("destination").get("locationId"), destId));
             }
 
+            if (routeId != null) {
+                predicates.add(cb.equal(root.get("route").get("routeId"), routeId));
+            }
+
+            // 2.3 Price
             if (minPrice != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(minPrice)));
             }
@@ -114,12 +126,14 @@ public class TripService implements ITripService {
                 predicates.add(cb.lessThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(maxPrice)));
             }
 
+            // 2.4 Date
             if (date != null) {
                 LocalDateTime startOfDay = date.atStartOfDay();
                 LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
                 predicates.add(cb.between(root.get("departureTime"), startOfDay, endOfDay));
             }
 
+            // 2.5 Time Ranges (PostgreSQL date_part)
             if (timeRanges != null && !timeRanges.isEmpty()) {
                 List<Predicate> timePredicates = new ArrayList<>();
                 Expression<Double> hourDouble = cb.function("date_part", Double.class, cb.literal("hour"),
@@ -146,11 +160,18 @@ public class TripService implements ITripService {
                     predicates.add(cb.or(timePredicates.toArray(new Predicate[0])));
             }
 
+            // 2.6 Vehicle Types
             if (vehicleTypes != null && !vehicleTypes.isEmpty()) {
                 predicates.add(root.get("vehicle").get("vehicleType").get("typeName").in(vehicleTypes));
             }
 
+            // 2.7 Min Available Seats
             if (minAvailableSeats != null && minAvailableSeats > 0) {
+                // Nếu bạn đã tạo cột available_seats thì dùng dòng này (SIÊU NHANH):
+                // predicates.add(cb.greaterThanOrEqualTo(root.get("availableSeats"),
+                // minAvailableSeats));
+
+                // Nếu chưa có cột đó thì dùng Subquery (Cách hiện tại):
                 Subquery<Long> sub = query.subquery(Long.class);
                 jakarta.persistence.criteria.Root<TripSeat> subRoot = sub.from(TripSeat.class);
                 sub.select(cb.count(subRoot));
@@ -162,6 +183,9 @@ public class TripService implements ITripService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
+        // --- OPTIMIZED 3-PHASE APPROACH (1 query for stats instead of 2) ---
+
+        // PHASE 1: Get Trip IDs (light query with filters)
         Page<Trip> idPage = tripRepository.findAll(spec, pageable);
         List<Integer> tripIds = idPage.getContent().stream()
                 .map(Trip::getTripId)
@@ -171,8 +195,10 @@ public class TripService implements ITripService {
             return Page.empty(pageable);
         }
 
+        // PHASE 2: Eager Load Trip Details (JOIN FETCH all relationships)
         List<Trip> detailedTrips = tripRepository.findTripsDetailByIds(tripIds);
 
+        // Preserve original order (SQL IN doesn't guarantee order)
         Map<Integer, Trip> tripMap = detailedTrips.stream()
                 .collect(Collectors.toMap(Trip::getTripId, trip -> trip));
 
@@ -181,8 +207,12 @@ public class TripService implements ITripService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
+        // PHASE 3: Batch Query ALL seat statuses in ONE query
+        // Returns [tripId, status (lowercase), count] - more efficient than 2 separate
+        // queries
         List<Object[]> rawStats = tripRepository.countSeatStatusByTripIds(tripIds);
 
+        // Convert to Map<TripId, Map<Status, Count>>
         Map<Integer, Map<String, Integer>> statsMap = new HashMap<>();
         for (Object[] row : rawStats) {
             Integer tId = (Integer) row[0];
@@ -193,23 +223,28 @@ public class TripService implements ITripService {
             statsMap.get(tId).put(status, count.intValue());
         }
 
+        // PHASE 4: Map to DTOs (all data from memory, zero extra queries)
         List<TripDetailedResponseDTO> dtos = sortedTrips.stream()
                 .map(trip -> {
                     TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
 
+                    // Set Total Seats
                     if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
                         dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
                     } else {
-                        dto.setTotalSeats(40);
+                        dto.setTotalSeats(40); // Default fallback
                     }
 
+                    // Get stats from memory (zero queries)
                     Map<String, Integer> tripStats = statsMap.getOrDefault(trip.getTripId(), new HashMap<>());
 
+                    // Sum all "booked" type statuses
                     int booked = tripStats.getOrDefault("booked", 0) +
                             tripStats.getOrDefault("sold", 0) +
                             tripStats.getOrDefault("reserved", 0) +
                             tripStats.getOrDefault("paid", 0);
 
+                    // Sum all "checked-in" type statuses
                     int checkedIn = tripStats.getOrDefault("checkedin", 0) +
                             tripStats.getOrDefault("used", 0) +
                             tripStats.getOrDefault("checked-in", 0);
@@ -227,7 +262,7 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId,
-                                        Pageable pageable) {
+            Pageable pageable) {
         String filterStatus = StringUtils.hasText(status) ? status : null;
         LocalDateTime start = null;
         LocalDateTime end = null;
@@ -274,6 +309,8 @@ public class TripService implements ITripService {
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
+        // Validate vehicle status - only "Operational" vehicles can be assigned to
+        // trips
         if (!"Operational".equalsIgnoreCase(vehicle.getStatus())) {
             throw new BadRequestException("Vehicle is not operational! Current status: " + vehicle.getStatus());
         }
@@ -301,6 +338,7 @@ public class TripService implements ITripService {
         Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 5.0;
         LocalDateTime arrivalTime = departureTime.plusMinutes((long) (durationHours * 60));
 
+        // Log kiểm tra conflict
         log.info("=== CHECKING CONFLICTS ===");
         log.info("Vehicle ID: {}, License: {}", vehicle.getVehicleId(), vehicle.getLicensePlate());
         log.info("Departure: {}", departureTime);
@@ -312,6 +350,7 @@ public class TripService implements ITripService {
         log.info("Vehicle conflict result: {}", vehicleConflict);
 
         if (vehicleConflict) {
+            // Log chi tiết các chuyến bị conflict
             List<Trip> conflictingTrips = tripRepository.findConflictingTripsForVehicle(
                     request.getVehicleId(), departureTime, arrivalTime);
             log.warn("Found {} conflicting trips for vehicle {}", conflictingTrips.size(), vehicle.getLicensePlate());
@@ -408,7 +447,7 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
-                                        Pageable pageable) {
+            Pageable pageable) {
         log.info("[TripService] Getting trips for driverId: {}, status: {}, startDate: {}, endDate: {}, page: {}",
                 driverId, status, startDate, endDate, pageable.getPageNumber());
 
@@ -419,6 +458,7 @@ public class TripService implements ITripService {
 
         String filterStatus = StringUtils.hasText(status) ? status : null;
 
+        // Convert LocalDate to LocalDateTime
         java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
 
@@ -465,7 +505,6 @@ public class TripService implements ITripService {
         return dto;
     }
 
-    // [UPDATED] Hàm updateTrip đã fix lỗi Lazy
     @Override
     @Transactional
     public Trip updateTrip(Integer tripId, TripUpdateRequestDTO request) {
@@ -481,6 +520,7 @@ public class TripService implements ITripService {
         Driver newDriver = driverRepository.findById(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
+        // Validate vehicle status
         if (!"Operational".equalsIgnoreCase(newVehicle.getStatus())) {
             throw new BadRequestException("Vehicle is not operational! Current status: " + newVehicle.getStatus());
         }
@@ -503,6 +543,7 @@ public class TripService implements ITripService {
                     .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
         }
 
+        // Check vehicle conflict if vehicle changed (exclude current trip)
         if (!trip.getVehicle().getVehicleId().equals(request.getVehicleId())) {
             boolean vehicleConflict = tripRepository.existsByVehicleAndOverlapExcludingTrip(
                     request.getVehicleId(), trip.getDepartureTime(), trip.getArrivalTime(), tripId);
@@ -511,6 +552,7 @@ public class TripService implements ITripService {
             }
         }
 
+        // Check driver conflict if driver changed (exclude current trip)
         if (!trip.getDriver().getDriverId().equals(request.getDriverId())) {
             boolean driverConflict = tripRepository.isPersonBusyExcludingTrip(
                     request.getDriverId(), trip.getDepartureTime(), trip.getArrivalTime(), tripId);
@@ -520,6 +562,7 @@ public class TripService implements ITripService {
             }
         }
 
+        // Check sub-driver conflict if sub-driver changed
         if (subDriver != null) {
             Integer currentSubDriverId = trip.getSubDriver() != null ? trip.getSubDriver().getDriverId() : null;
             if (!subDriver.getDriverId().equals(currentSubDriverId)) {
@@ -537,15 +580,7 @@ public class TripService implements ITripService {
         trip.setSubDriver(subDriver);
         trip.setBasePrice(request.getPrice());
 
-        // 1. Lưu
-        tripRepository.save(trip);
-
-        // 2. Đẩy dữ liệu xuống DB
-        tripRepository.flush();
-
-        // 3. Query lại đầy đủ quan hệ để trả về cho Controller
-        return tripRepository.findByIdWithDetails(tripId)
-                .orElseThrow(() -> new ResourceNotFoundException("Trip not found after update"));
+        return tripRepository.save(trip);
     }
 
     @Override
@@ -629,10 +664,11 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
-                                          Pageable pageable) {
+            Pageable pageable) {
         log.info("[TripService] Getting trips for userId: {}, status: {}, startDate: {}, endDate: {}",
                 userId, status, startDate, endDate);
 
+        // Get driver by userId
         Driver driver = driverRepository.findByUserId(userId)
                 .orElseThrow(() -> {
                     log.error("[TripService] Driver profile not found for userId: {}", userId);
@@ -641,9 +677,11 @@ public class TripService implements ITripService {
 
         log.info("[TripService] Found driver with driverId: {} for userId: {}", driver.getDriverId(), userId);
 
+        // Convert LocalDate to LocalDateTime
         java.time.LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         java.time.LocalDateTime endDateTime = endDate != null ? endDate.atTime(java.time.LocalTime.MAX) : null;
 
+        // Reuse existing method with driverId
         String filterStatus = StringUtils.hasText(status) ? status : null;
         Page<Trip> trips = tripRepository.findTripsByDriverOrSubDriver(
                 driver.getDriverId(),
@@ -658,6 +696,8 @@ public class TripService implements ITripService {
     }
 
     public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
+        // Use findByIdWithDetails to eagerly load all relationships (driver, vehicle,
+        // route, etc.)
         Trip trip = tripRepository.findByIdWithDetails(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 

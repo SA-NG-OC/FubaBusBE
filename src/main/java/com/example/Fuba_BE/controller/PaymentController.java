@@ -67,12 +67,14 @@ public class PaymentController {
     }
 
     /**
-     * Create MoMo payment for a booking
+     * Create MoMo payment for a booking by booking ID
      */
     @PostMapping("/momo/create/{bookingId}")
-    @Operation(summary = "Create MoMo payment", description = "Create a MoMo payment session for a booking in Held status. "
-            +
-            "Returns payment URL to redirect user to MoMo payment page.")
+    @Operation(
+            summary = "Create MoMo payment by booking ID",
+            description = "Create a MoMo payment session for a booking in Held status. " +
+                    "Returns payment URL to redirect user to MoMo payment page."
+    )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Payment created successfully"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid booking status or MoMo error"),
@@ -85,6 +87,51 @@ public class PaymentController {
 
         PaymentResponse paymentResponse = momoPaymentService.createPayment(bookingId);
 
+        return ResponseEntity.ok(ApiResponse.<PaymentResponse>builder()
+                .success(true)
+                .message("Tạo thanh toán MoMo thành công")
+                .data(paymentResponse)
+                .build());
+    }
+
+    /**
+     * Create MoMo payment for a booking by booking code
+     * This is the recommended endpoint for frontend to use with booking code from UI
+     */
+    @PostMapping("/momo/create-by-code/{bookingCode}")
+    @Operation(
+            summary = "Create MoMo payment by booking code",
+            description = "Create a MoMo payment session using booking code (e.g., BK20260119021). " +
+                    "Returns payment URL to redirect user to MoMo payment page. " +
+                    "This endpoint is designed for users who want to continue payment from pending booking page."
+    )
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "Payment created successfully"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid booking status or MoMo error"
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Booking not found"
+            )
+    })
+    public ResponseEntity<ApiResponse<PaymentResponse>> createMomoPaymentByCode(
+            @Parameter(description = "Booking Code (e.g., BK20260119021)", required = true)
+            @PathVariable String bookingCode) {
+        
+        log.info("Creating MoMo payment for booking code: {}", bookingCode);
+        
+        // Find booking by code
+        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+                .orElseThrow(() -> new com.example.Fuba_BE.exception.NotFoundException(
+                        "Không tìm thấy booking với mã: " + bookingCode));
+        
+        PaymentResponse paymentResponse = momoPaymentService.createPayment(booking.getBookingId());
+        
         return ResponseEntity.ok(ApiResponse.<PaymentResponse>builder()
                 .success(true)
                 .message("Tạo thanh toán MoMo thành công")
@@ -151,9 +198,13 @@ public class PaymentController {
             @RequestParam(required = false) Long transId) {
 
         log.info("🔄 MoMo redirect: orderId={}, resultCode={}, transId={}", orderId, resultCode, transId);
-
+        
+        // Extract booking code from orderId (format: BK20260119021-1737285600123)
+        String bookingCode = orderId.contains("-") ? orderId.substring(0, orderId.lastIndexOf("-")) : orderId;
+        
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
+        data.put("bookingCode", bookingCode);
         data.put("requestId", requestId);
         data.put("resultCode", resultCode);
         data.put("transId", transId);
@@ -162,7 +213,7 @@ public class PaymentController {
         // Check booking status and sync if needed
         String bookingStatus = "Unknown";
         try {
-            Booking booking = bookingRepository.findByBookingCode(orderId).orElse(null);
+            Booking booking = bookingRepository.findByBookingCode(bookingCode).orElse(null);
             if (booking != null) {
                 bookingStatus = booking.getBookingStatus();
                 data.put("bookingStatus", bookingStatus);
@@ -170,8 +221,8 @@ public class PaymentController {
                 // If payment successful but booking still Pending, IPN might not have arrived
                 // yet
                 if (resultCode == 0 && "Pending".equals(bookingStatus)) {
-                    log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", orderId);
-
+                    log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", bookingCode);
+                    
                     // Query MoMo status and manually complete payment if confirmed
                     if (requestId != null && !requestId.isEmpty()) {
                         try {
@@ -195,14 +246,13 @@ public class PaymentController {
                                 boolean completed = momoPaymentService.handleIpnCallback(manualIpn);
 
                                 if (completed) {
-                                    log.info("🎉 Payment manually completed for booking {}", orderId);
+                                    log.info("🎉 Payment manually completed for booking {}", bookingCode);
                                     bookingStatus = "Paid";
                                     data.put("bookingStatus", bookingStatus);
                                     data.put("note", "Payment completed successfully.");
                                 } else {
-                                    log.error("❌ Failed to manually complete payment for booking {}", orderId);
-                                    data.put("note",
-                                            "Payment confirmed but processing failed. Please contact support.");
+                                    log.error("❌ Failed to manually complete payment for booking {}", bookingCode);
+                                    data.put("note", "Payment confirmed but processing failed. Please contact support.");
                                 }
                             }
                         } catch (Exception e) {
@@ -213,11 +263,11 @@ public class PaymentController {
                         data.put("note", "Payment confirmed. Booking update in progress.");
                     }
                 } else if (resultCode == 0 && "Paid".equals(bookingStatus)) {
-                    log.info("✅ Booking {} already marked as Paid", orderId);
+                    log.info("✅ Booking {} already marked as Paid", bookingCode);
                     data.put("note", "Payment completed successfully.");
                 }
             } else {
-                log.error("❌ Booking not found: {}", orderId);
+                log.error("❌ Booking not found: {}", bookingCode);
                 data.put("bookingStatus", "NotFound");
             }
         } catch (Exception e) {

@@ -81,15 +81,17 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
     List<Ticket> findByTripId(@Param("tripId") Integer tripId);
 
     /**
-     * Find all active tickets for a trip with seat info using JOIN FETCH.
-     * Includes Confirmed, USED, Unconfirmed tickets (excludes Cancelled).
+     * Find all tickets for a trip including cancelled ones to show complete seat
+     * occupancy.
+     * Fetches booking, seat relationships eagerly to avoid N+1 queries.
+     * NOTE: Returns ALL tickets (including Cancelled) so that booked seats show
+     * their ticket data.
+     * Frontend/service layer can filter by ticketStatus if needed.
      */
     @Query("SELECT DISTINCT t FROM Ticket t " +
             "JOIN FETCH t.booking b " +
-            "JOIN FETCH t.seat s " +
-            "WHERE b.trip.tripId = :tripId " +
-            "AND t.ticketStatus NOT IN ('Cancelled') " +
-            "AND b.bookingStatus NOT IN ('Cancelled', 'Expired')")
+            "JOIN FETCH t.seat " +
+            "WHERE b.trip.tripId = :tripId")
     List<Ticket> findActiveTicketsByTripIdWithDetails(@Param("tripId") Integer tripId);
 
     /**

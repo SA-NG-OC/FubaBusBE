@@ -62,22 +62,24 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
 
     // 3. Hàm cho DashboardService
     @Query(value = """
-                SELECT t,
-                (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
-                FROM Trip t
-                LEFT JOIN FETCH t.route r
-                LEFT JOIN FETCH r.origin o
-                LEFT JOIN FETCH r.destination d
-                LEFT JOIN FETCH t.vehicle v
-                LEFT JOIN FETCH v.vehicleType vt
-                WHERE t.departureTime BETWEEN :start AND :end
-                AND (:routeId IS NULL OR r.routeId = :routeId)
-            """, countQuery = """
-                SELECT COUNT(t) FROM Trip t
-                LEFT JOIN t.route r
-                WHERE t.departureTime BETWEEN :start AND :end
-                AND (:routeId IS NULL OR r.routeId = :routeId)
-            """)
+            SELECT t,
+            (SELECT COUNT(ts) FROM TripSeat ts WHERE ts.trip = t AND (ts.status = 'Booked' OR ts.status = 'Held'))
+            FROM Trip t
+            LEFT JOIN FETCH t.route r
+            LEFT JOIN FETCH r.origin o
+            LEFT JOIN FETCH r.destination d
+            LEFT JOIN FETCH t.vehicle v
+            LEFT JOIN FETCH v.vehicleType vt
+            WHERE 
+            ((:start IS NULL AND :end IS NULL) OR (t.departureTime BETWEEN :start AND :end))
+            AND (:routeId IS NULL OR r.routeId = :routeId)
+        """, countQuery = """
+            SELECT COUNT(t) FROM Trip t
+            LEFT JOIN t.route r
+            WHERE 
+            ((:start IS NULL AND :end IS NULL) OR (t.departureTime BETWEEN :start AND :end))
+            AND (:routeId IS NULL OR r.routeId = :routeId)
+        """)
     Page<Object[]> findTripsWithBookingCount(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,

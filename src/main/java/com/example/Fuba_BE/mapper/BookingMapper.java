@@ -35,6 +35,21 @@ public class BookingMapper {
             return null;
         }
 
+        // Calculate remaining seconds if booking is Held or Pending
+        Long remainingSeconds = null;
+        if (booking.getHoldExpiry() != null && 
+            ("Held".equals(booking.getBookingStatus()) || "Pending".equals(booking.getBookingStatus()))) {
+            java.time.Duration duration = java.time.Duration.between(
+                java.time.LocalDateTime.now(), 
+                booking.getHoldExpiry()
+            );
+            remainingSeconds = duration.getSeconds();
+            // If negative (expired), set to 0
+            if (remainingSeconds < 0) {
+                remainingSeconds = 0L;
+            }
+        }
+
         return BookingResponse.builder()
                 .bookingId(booking.getBookingId())
                 .bookingCode(booking.getBookingCode())
@@ -48,6 +63,8 @@ public class BookingMapper {
                 .bookingType(booking.getBookingType())
                 .tickets(toTicketInfoList(tickets, passengersByTicketId))
                 .createdAt(booking.getCreatedAt())
+                .holdExpiry(booking.getHoldExpiry())
+                .remainingSeconds(remainingSeconds)
                 .build();
     }
 
