@@ -8,12 +8,16 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.example.Fuba_BE.config.CacheConfig;
 import com.example.Fuba_BE.domain.entity.Location;
 import com.example.Fuba_BE.domain.entity.Route;
 import com.example.Fuba_BE.domain.entity.RouteStop;
@@ -55,6 +59,7 @@ public class RouteService implements IRouteService {
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_ROUTE_SELECTIONS, allEntries = true)
     public RouteResponseDTO createRoute(RouteRequestDTO request) {
         log.info("🚀 Creating new route: {} -> {}", request.getOriginName(), request.getDestinationName());
         try {
@@ -64,7 +69,7 @@ public class RouteService implements IRouteService {
             validateRouteRequest(request);
             // Check for duplicate route
             checkDuplicateRoute(request);
-            
+
             Route route = routeMapper.toEntity(request);
 
             Location origin = getLocationByName(request.getOriginName());
@@ -72,7 +77,8 @@ public class RouteService implements IRouteService {
 
             route.setOrigin(origin);
             route.setDestination(destination);
-            if (route.getStatus() == null) route.setStatus("Active");
+            if (route.getStatus() == null)
+                route.setStatus("Active");
 
             Route savedRoute = routeRepository.save(route);
             log.info("✅ Route entity saved with ID: {}", savedRoute.getRouteId());
@@ -92,6 +98,10 @@ public class RouteService implements IRouteService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_ROUTES, key = "#routeId"),
+            @CacheEvict(value = CacheConfig.CACHE_ROUTE_SELECTIONS, allEntries = true)
+    })
     public RouteResponseDTO updateRoute(Integer routeId, RouteRequestDTO request) {
         log.info("🔄 Updating route ID: {}", routeId);
         try {
@@ -99,7 +109,7 @@ public class RouteService implements IRouteService {
             validateAllLocationsExist(request);
             // Validate business rules
             validateRouteRequest(request);
-            
+
             Route route = routeRepository.findById(routeId)
                     .orElseThrow(() -> {
                         log.error("❌ Route not found for update: ID {}", routeId);
@@ -134,6 +144,10 @@ public class RouteService implements IRouteService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_ROUTES, key = "#routeId"),
+            @CacheEvict(value = CacheConfig.CACHE_ROUTE_SELECTIONS, allEntries = true)
+    })
     public void deleteRoute(Integer routeId) {
         log.info("🗑 Deleting route ID: {}", routeId);
         try {
@@ -174,7 +188,8 @@ public class RouteService implements IRouteService {
     }
 
     private Page<RouteResponseDTO> enrichRoutePage(Page<Route> page) {
-        if (page.isEmpty()) return page.map(routeMapper::toResponseDTO);
+        if (page.isEmpty())
+            return page.map(routeMapper::toResponseDTO);
 
         List<Integer> routeIds = page.getContent().stream()
                 .map(Route::getRouteId)
@@ -227,21 +242,22 @@ public class RouteService implements IRouteService {
      */
     private void validateAllLocationsExist(RouteRequestDTO request) {
         log.debug("Validating all locations exist...");
-        
+
         // Check origin
         locationRepository.findByLocationName(request.getOriginName())
                 .orElseThrow(() -> {
                     log.error("❌ Origin location not found: '{}'", request.getOriginName());
                     return new ResourceNotFoundException("Origin location not found: " + request.getOriginName());
                 });
-        
+
         // Check destination
         locationRepository.findByLocationName(request.getDestinationName())
                 .orElseThrow(() -> {
                     log.error("❌ Destination location not found: '{}'", request.getDestinationName());
-                    return new ResourceNotFoundException("Destination location not found: " + request.getDestinationName());
+                    return new ResourceNotFoundException(
+                            "Destination location not found: " + request.getDestinationName());
                 });
-        
+
         // Check all intermediate stops
         if (request.getIntermediateStopNames() != null && !request.getIntermediateStopNames().isEmpty()) {
             for (String stopName : request.getIntermediateStopNames()) {
@@ -250,12 +266,13 @@ public class RouteService implements IRouteService {
                     locationRepository.findByLocationName(normalized)
                             .orElseThrow(() -> {
                                 log.error("❌ Intermediate stop location not found: '{}'", normalized);
-                                return new ResourceNotFoundException("Intermediate stop location not found: " + normalized);
+                                return new ResourceNotFoundException(
+                                        "Intermediate stop location not found: " + normalized);
                             });
                 }
             }
         }
-        
+
         log.debug("✅ All locations validated successfully");
     }
 
@@ -265,15 +282,17 @@ public class RouteService implements IRouteService {
     private void checkDuplicateRoute(RouteRequestDTO request) {
         Location origin = locationRepository.findByLocationName(request.getOriginName()).get();
         Location destination = locationRepository.findByLocationName(request.getDestinationName()).get();
-        
+
         boolean exists = routeRepository.existsByOriginAndDestination(origin, destination);
         if (exists) {
             log.warn("⚠️ Duplicate route detected: {} -> {}", request.getOriginName(), request.getDestinationName());
-            throw new BadRequestException("Route from " + request.getOriginName() + " to " + request.getDestinationName() + " already exists");
+            throw new BadRequestException("Route from " + request.getOriginName() + " to "
+                    + request.getDestinationName() + " already exists");
         }
     }
 
-    private void createRouteStops(Route route, Location origin, Location destination, List<String> intermediateStopNames) {
+    private void createRouteStops(Route route, Location origin, Location destination,
+            List<String> intermediateStopNames) {
         log.debug("Creating stops for Route ID: {}", route.getRouteId());
         int orderCounter = 1;
 
@@ -300,23 +319,34 @@ public class RouteService implements IRouteService {
         }
 
         // 3. End Stop
-        RouteStop endStop = createStop(route, destination, orderCounter, "DESTINATION", false, true, route.getDistance(), route.getEstimatedDuration());
+        RouteStop endStop = createStop(route, destination, orderCounter, "DESTINATION", false, true,
+                route.getDistance(), route.getEstimatedDuration());
         routeStopRepository.save(endStop);
         log.debug("   + Destination stop created: {}", destination.getLocationName());
     }
 
-    private RouteStop createStop(Route route, Location loc, int order, String type, boolean pickup, boolean dropoff, BigDecimal dist, int time) {
+    private RouteStop createStop(Route route, Location loc, int order, String type, boolean pickup, boolean dropoff,
+            BigDecimal dist, int time) {
         RouteStop s = new RouteStop();
-        s.setRoute(route); s.setLocation(loc); s.setStopOrder(order); s.setStopType(type);
-        s.setStopName(loc.getLocationName()); s.setStopAddress(loc.getAddress());
-        s.setLatitude(loc.getLatitude()); s.setLongitude(loc.getLongitude());
-        s.setIsPickupPoint(pickup); s.setIsDropoffPoint(dropoff);
-        s.setDistanceFromOrigin(dist); s.setEstimatedTime(time);
+        s.setRoute(route);
+        s.setLocation(loc);
+        s.setStopOrder(order);
+        s.setStopType(type);
+        s.setStopName(loc.getLocationName());
+        s.setStopAddress(loc.getAddress());
+        s.setLatitude(loc.getLatitude());
+        s.setLongitude(loc.getLongitude());
+        s.setIsPickupPoint(pickup);
+        s.setIsDropoffPoint(dropoff);
+        s.setDistanceFromOrigin(dist);
+        s.setEstimatedTime(time);
         return s;
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_ROUTE_SELECTIONS)
     public List<RouteSelectionDTO> getAllRoutesForSelection() {
+        log.debug("📥 Cache MISS - Fetching routes for selection from database");
         return routeRepository.findByStatus("Active").stream()
                 .map(selectionMapper::toRouteSelectionDTO)
                 .toList();

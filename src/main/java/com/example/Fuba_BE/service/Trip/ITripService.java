@@ -15,40 +15,41 @@ import com.example.Fuba_BE.dto.Trip.TripDetailedResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TripUpdateRequestDTO;
 
 public interface ITripService {
-    List<LocalDate> getDaysWithTrips(LocalDate startDate, LocalDate endDate);
+        List<LocalDate> getDaysWithTrips(LocalDate startDate, LocalDate endDate);
 
-    List<Trip> getTripsDetailsByDate(LocalDate date);
+        List<Trip> getTripsDetailsByDate(LocalDate date);
 
-    void updateTripStatus(Integer tripId, String status, String note);
+        void updateTripStatus(Integer tripId, String status, String note);
 
-    Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId, Pageable pageable);
+        Page<Trip> getTripsByFilters(String status, LocalDate date, Integer originId, Integer destId,
+                        Pageable pageable);
 
-    Trip createTrip(TripCreateRequestDTO request);
+        Trip createTrip(TripCreateRequestDTO request);
 
-    void deleteTrip(Integer tripId);
+        void deleteTrip(Integer tripId);
 
-    Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
-            Pageable pageable);
+        Page<Trip> getTripsForDriver(Integer driverId, String status, LocalDate startDate, LocalDate endDate,
+                        Pageable pageable);
 
-    List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId);
+        List<PassengerOnTripResponseDTO> getPassengersOnTrip(Integer tripId);
 
-    TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId);
+        TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId);
 
-    Trip updateTrip(Integer tripId, TripUpdateRequestDTO request);
+        Trip updateTrip(Integer tripId, TripUpdateRequestDTO request);
 
-    Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-            String search, Integer originId, Integer destId,
-            Double minPrice, Double maxPrice, LocalDate date,
-            List<String> timeRanges, List<String> vehicleTypes,
-            Integer minAvailableSeats);
+        Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
+                        String search, Integer originId, Integer destId,
+                        Double minPrice, Double maxPrice, LocalDate date,
+                        List<String> timeRanges, List<String> vehicleTypes,
+                        Integer minAvailableSeats, List<String> statuses);
 
-    // Driver-specific endpoints
-    TicketDetailResponseDTO getTicketDetail(Integer ticketId);
+        // Driver-specific endpoints
+        TicketDetailResponseDTO getTicketDetail(Integer ticketId);
 
-    void completeTrip(Integer tripId, CompleteTripRequestDTO request);
+        void completeTrip(Integer tripId, CompleteTripRequestDTO request);
 
-    Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
-            Pageable pageable);
+        Page<Trip> getMyTripsForDriver(Integer userId, String status, LocalDate startDate, LocalDate endDate,
+                        Pageable pageable);
 
-    TripDetailedResponseDTO getTripDetailById(Integer tripId);
+        TripDetailedResponseDTO getTripDetailById(Integer tripId);
 }

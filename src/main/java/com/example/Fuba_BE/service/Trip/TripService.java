@@ -77,7 +77,7 @@ public class TripService implements ITripService {
             String search, Integer originId, Integer destId,
             Double minPrice, Double maxPrice, LocalDate date,
             List<String> timeRanges, List<String> vehicleTypes,
-            Integer minAvailableSeats) {
+            Integer minAvailableSeats, List<String> statuses) {
 
         // --- 1. SETUP PAGEABLE ---
         Sort sort = sortDir.equalsIgnoreCase("desc")
@@ -89,12 +89,16 @@ public class TripService implements ITripService {
         Specification<Trip> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // DEFAULT: Only show Waiting trips (not started yet)
-            // Only show trips that are available for booking
-            predicates.add(cb.equal(root.get("status"), "Waiting"));
+            // Filter by status list (default: Waiting, Running)
+            if (statuses != null && !statuses.isEmpty()) {
+                predicates.add(root.get("status").in(statuses));
+            }
 
-            // Also filter: departureTime must be in the future
-            predicates.add(cb.greaterThan(root.get("departureTime"), LocalDateTime.now()));
+            // Also filter: departureTime must be in the future (only for Waiting status)
+            // For Running/Completed, we don't filter by time
+            if (statuses != null && statuses.size() == 1 && statuses.contains("Waiting")) {
+                predicates.add(cb.greaterThan(root.get("departureTime"), LocalDateTime.now()));
+            }
 
             // Search by Route Name
             if (search != null && !search.isEmpty()) {
@@ -687,7 +691,9 @@ public class TripService implements ITripService {
     }
 
     public TripDetailedResponseDTO getTripDetailById(Integer tripId) {
-        Trip trip = tripRepository.findById(tripId)
+        // Use findByIdWithDetails to eagerly load all relationships (driver, vehicle,
+        // route, etc.)
+        Trip trip = tripRepository.findByIdWithDetails(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found with id: " + tripId));
 
         TripDetailedResponseDTO responseDTO = tripMapper.toDetailedDTO(trip);

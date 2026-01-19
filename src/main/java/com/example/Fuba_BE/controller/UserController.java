@@ -96,6 +96,21 @@ public class UserController {
     }
 
     /**
+     * Get customers (role USER) with search and filter
+     * ADMIN and STAFF can view customers
+     */
+    @GetMapping("/customers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<Page<UserResponseDTO>>> getCustomers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
+            @PageableDefault(page = 0, size = 20, sort = "userId", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.info("📥 Request to get customers - search: {}, status: {}", search, status);
+        Page<UserResponseDTO> customers = userService.getCustomers(search, status, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Customers retrieved successfully", customers));
+    }
+
+    /**
      * Get user by ID
      * ADMIN and STAFF can view user details
      */

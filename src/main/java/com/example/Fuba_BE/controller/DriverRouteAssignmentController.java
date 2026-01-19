@@ -51,27 +51,28 @@ public class DriverRouteAssignmentController {
      * POST /driver-route-assignments
      */
     @PostMapping
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<DriverRouteAssignmentResponse>> createAssignment(
             @Valid @RequestBody CreateDriverRouteAssignmentRequest request) {
-        
-        log.info("Creating driver-route assignment. Driver: {}, Route: {}", 
-                 request.getDriverId(), request.getRouteId());
 
-        // Validate driver exists
-        var driver = driverRepository.findById(request.getDriverId())
-            .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
+        log.info("Creating driver-route assignment. Driver: {}, Route: {}",
+                request.getDriverId(), request.getRouteId());
 
-        // Validate route exists
-        var route = routeRepository.findById(request.getRouteId())
-            .orElseThrow(() -> new NotFoundException("Route not found with ID: " + request.getRouteId()));
+        // Validate driver exists (with User fetch to avoid lazy loading)
+        var driver = driverRepository.findByIdWithUser(request.getDriverId())
+                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
+
+        // Validate route exists (with origin/destination to avoid
+        // LazyInitializationException)
+        var route = routeRepository.findByIdWithLocations(request.getRouteId())
+                .orElseThrow(() -> new NotFoundException("Route not found with ID: " + request.getRouteId()));
 
         // Check for overlapping assignments
         boolean hasOverlap = assignmentRepository.hasOverlappingAssignment(
-            request.getDriverId(),
-            request.getRouteId(),
-            request.getStartDate(),
-            request.getEndDate() != null ? request.getEndDate() : LocalDate.of(9999, 12, 31)
-        );
+                request.getDriverId(),
+                request.getRouteId(),
+                request.getStartDate(),
+                request.getEndDate() != null ? request.getEndDate() : LocalDate.of(9999, 12, 31));
 
         if (hasOverlap) {
             throw new BadRequestException("Driver already has an overlapping assignment for this route");
@@ -79,14 +80,14 @@ public class DriverRouteAssignmentController {
 
         // Create assignment
         DriverRouteAssignment assignment = DriverRouteAssignment.builder()
-            .driver(driver)
-            .route(route)
-            .preferredRole(request.getPreferredRole())
-            .priority(request.getPriority())
-            .startDate(request.getStartDate())
-            .endDate(request.getEndDate())
-            .notes(request.getNotes())
-            .build();
+                .driver(driver)
+                .route(route)
+                .preferredRole(request.getPreferredRole())
+                .priority(request.getPriority())
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .notes(request.getNotes())
+                .build();
 
         assignment = assignmentRepository.save(assignment);
         log.info("Created assignment with ID: {}", assignment.getAssignmentId());
@@ -99,10 +100,11 @@ public class DriverRouteAssignmentController {
      * GET /driver-route-assignments?page=0&size=20
      */
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<Page<DriverRouteAssignmentResponse>>> getAllAssignments(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        
+
         Pageable pageable = PageRequest.of(page, size);
         Page<DriverRouteAssignment> assignments = assignmentRepository.findAll(pageable);
         Page<DriverRouteAssignmentResponse> response = assignments.map(this::mapToResponse);
@@ -118,7 +120,7 @@ public class DriverRouteAssignmentController {
     public ResponseEntity<ApiResponse<List<DriverRouteAssignmentResponse>>> getByDriver(
             @PathVariable Integer driverId,
             @RequestParam(required = false) String date) {
-        
+
         List<DriverRouteAssignment> assignments;
 
         if (date != null) {
@@ -129,8 +131,8 @@ public class DriverRouteAssignmentController {
         }
 
         List<DriverRouteAssignmentResponse> response = assignments.stream()
-            .map(this::mapToResponse)
-            .collect(Collectors.toList());
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.success("Driver assignments retrieved", response));
     }
@@ -143,7 +145,7 @@ public class DriverRouteAssignmentController {
     public ResponseEntity<ApiResponse<List<DriverRouteAssignmentResponse>>> getByRoute(
             @PathVariable Integer routeId,
             @RequestParam(required = false) String date) {
-        
+
         List<DriverRouteAssignment> assignments;
 
         if (date != null) {
@@ -154,8 +156,8 @@ public class DriverRouteAssignmentController {
         }
 
         List<DriverRouteAssignmentResponse> response = assignments.stream()
-            .map(this::mapToResponse)
-            .collect(Collectors.toList());
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.success("Route assignments retrieved", response));
     }
@@ -166,8 +168,8 @@ public class DriverRouteAssignmentController {
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DriverRouteAssignmentResponse>> getById(@PathVariable Integer id) {
-        DriverRouteAssignment assignment = assignmentRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Assignment not found with ID: " + id));
+        DriverRouteAssignment assignment = assignmentRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> new NotFoundException("Assignment not found with ID: " + id));
 
         return ResponseEntity.ok(ApiResponse.success("Assignment retrieved", mapToResponse(assignment)));
     }
@@ -177,26 +179,27 @@ public class DriverRouteAssignmentController {
      * PUT /driver-route-assignments/{id}
      */
     @PutMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<DriverRouteAssignmentResponse>> updateAssignment(
             @PathVariable Integer id,
             @Valid @RequestBody CreateDriverRouteAssignmentRequest request) {
-        
+
         log.info("Updating assignment ID: {}", id);
 
-        DriverRouteAssignment assignment = assignmentRepository.findById(id)
-            .orElseThrow(() -> new NotFoundException("Assignment not found with ID: " + id));
+        DriverRouteAssignment assignment = assignmentRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> new NotFoundException("Assignment not found with ID: " + id));
 
         // Validate driver if changed
         if (!assignment.getDriver().getDriverId().equals(request.getDriverId())) {
             var driver = driverRepository.findById(request.getDriverId())
-                .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
+                    .orElseThrow(() -> new NotFoundException("Driver not found with ID: " + request.getDriverId()));
             assignment.setDriver(driver);
         }
 
         // Validate route if changed
         if (!assignment.getRoute().getRouteId().equals(request.getRouteId())) {
             var route = routeRepository.findById(request.getRouteId())
-                .orElseThrow(() -> new NotFoundException("Route not found with ID: " + request.getRouteId()));
+                    .orElseThrow(() -> new NotFoundException("Route not found with ID: " + request.getRouteId()));
             assignment.setRoute(route);
         }
 
@@ -239,18 +242,18 @@ public class DriverRouteAssignmentController {
     public ResponseEntity<ApiResponse<List<DriverRouteAssignmentResponse>>> getAvailableDrivers(
             @RequestParam Integer routeId,
             @RequestParam String date) {
-        
+
         LocalDate specificDate = LocalDate.parse(date);
-        List<DriverRouteAssignment> assignments = assignmentRepository.findEffectiveByRouteAndDate(routeId, specificDate);
+        List<DriverRouteAssignment> assignments = assignmentRepository.findEffectiveByRouteAndDate(routeId,
+                specificDate);
 
         List<DriverRouteAssignmentResponse> response = assignments.stream()
-            .map(this::mapToResponse)
-            .collect(Collectors.toList());
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.success(
-            String.format("Found %d available drivers", response.size()),
-            response
-        ));
+                String.format("Found %d available drivers", response.size()),
+                response));
     }
 
     // ========== MAPPER ==========
@@ -260,19 +263,19 @@ public class DriverRouteAssignmentController {
         var route = assignment.getRoute();
 
         return DriverRouteAssignmentResponse.builder()
-            .assignmentId(assignment.getAssignmentId())
-            .driverId(driver.getDriverId())
-            .driverName(driver.getUser().getFullName())
-            .routeId(route.getRouteId())
-            .routeName(route.getRouteName())
-            .originName(route.getOrigin().getLocationName())
-            .destinationName(route.getDestination().getLocationName())
-            .preferredRole(assignment.getPreferredRole())
-            .priority(assignment.getPriority())
-            .isActive(assignment.getIsActive())
-            .startDate(assignment.getStartDate())
-            .endDate(assignment.getEndDate())
-            .notes(assignment.getNotes())
-            .build();
+                .assignmentId(assignment.getAssignmentId())
+                .driverId(driver.getDriverId())
+                .driverName(driver.getUser().getFullName())
+                .routeId(route.getRouteId())
+                .routeName(route.getRouteName())
+                .originName(route.getOrigin().getLocationName())
+                .destinationName(route.getDestination().getLocationName())
+                .preferredRole(assignment.getPreferredRole())
+                .priority(assignment.getPriority())
+                .isActive(assignment.getIsActive())
+                .startDate(assignment.getStartDate())
+                .endDate(assignment.getEndDate())
+                .notes(assignment.getNotes())
+                .build();
     }
 }

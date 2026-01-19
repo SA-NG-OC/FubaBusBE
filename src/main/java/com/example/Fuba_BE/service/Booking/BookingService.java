@@ -49,6 +49,7 @@ import com.example.Fuba_BE.repository.TicketRepository;
 import com.example.Fuba_BE.repository.TripRepository;
 import com.example.Fuba_BE.repository.TripSeatRepository;
 import com.example.Fuba_BE.repository.UserRepository;
+import com.example.Fuba_BE.service.AuditLog.IAuditLogService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +73,7 @@ public class BookingService implements IBookingService {
     private final RefundRepository refundRepository;
     private final BookingMapper bookingMapper;
     private final SimpMessagingTemplate messagingTemplate;
+    private final IAuditLogService auditLogService;
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -344,6 +346,14 @@ public class BookingService implements IBookingService {
             broadcastSeatUpdate(trip.getTripId(), seat);
         }
 
+        // Log staff activity for counter booking
+        if (staffUser != null) {
+            String ticketInfo = String.format("Booking: %s, Customer: %s (%s), Seats: %d, Amount: %s",
+                    bookingCode, request.getCustomerName(), request.getCustomerPhone(),
+                    tickets.size(), totalAmount);
+            auditLogService.logBookingCreated(staffUser.getUserId(), booking.getBookingId(), ticketInfo, null);
+        }
+
         log.info("Counter booking {} created successfully with {} tickets", bookingCode, tickets.size());
         return bookingMapper.toBookingResponse(booking, trip, tickets);
     }
@@ -429,7 +439,8 @@ public class BookingService implements IBookingService {
     @Override
     @Transactional(readOnly = true)
     public BookingResponse getBookingById(Integer bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        // Use findByIdWithDetails to eagerly load all trip relationships
+        Booking booking = bookingRepository.findByIdWithDetails(bookingId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với ID: " + bookingId));
 
         List<Ticket> tickets = ticketRepository.findByBookingId(bookingId);
@@ -439,7 +450,8 @@ public class BookingService implements IBookingService {
     @Override
     @Transactional(readOnly = true)
     public BookingResponse getBookingByCode(String bookingCode) {
-        Booking booking = bookingRepository.findByBookingCode(bookingCode)
+        // Use findByBookingCodeWithDetails to eagerly load all trip relationships
+        Booking booking = bookingRepository.findByBookingCodeWithDetails(bookingCode)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với mã: " + bookingCode));
 
         List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
@@ -449,7 +461,8 @@ public class BookingService implements IBookingService {
     @Override
     @Transactional(readOnly = true)
     public BookingResponse getBookingByTicketCode(String ticketCode) {
-        Booking booking = bookingRepository.findByTicketCode(ticketCode)
+        // Use findByTicketCodeWithDetails to eagerly load all trip relationships
+        Booking booking = bookingRepository.findByTicketCodeWithDetails(ticketCode)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy booking với mã vé: " + ticketCode));
 
         List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
@@ -625,6 +638,17 @@ public class BookingService implements IBookingService {
 
         log.info("Booking {} cancelled successfully by user. {} seats released. Refund needed: {}",
                 booking.getBookingCode(), tickets.size(), needsRefund);
+
+        // Log cancellation activity (useful for tracking staff cancellations)
+        try {
+            Integer cancellerId = Integer.parseInt(userId);
+            String reason = String.format("Booking: %s, Tickets: %d, Previous Status: %s, Refund: %s",
+                    booking.getBookingCode(), tickets.size(), previousStatus, needsRefund ? "Yes" : "No");
+            auditLogService.logBookingCancelled(cancellerId, bookingId, reason, null);
+        } catch (NumberFormatException e) {
+            // Guest cancellation, no audit needed
+        }
+
         return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
     }
 

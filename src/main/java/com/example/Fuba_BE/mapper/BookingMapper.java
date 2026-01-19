@@ -29,8 +29,8 @@ public class BookingMapper {
     /**
      * Convert Booking entity to BookingResponse DTO with pre-fetched passengers
      */
-    public BookingResponse toBookingResponse(Booking booking, Trip trip, List<Ticket> tickets, 
-                                            java.util.Map<Integer, Passenger> passengersByTicketId) {
+    public BookingResponse toBookingResponse(Booking booking, Trip trip, List<Ticket> tickets,
+            java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (booking == null) {
             return null;
         }
@@ -69,6 +69,7 @@ public class BookingMapper {
                 .dropoffLocation(getDropoffLocationName(trip))
                 .dropoffTime(trip.getArrivalTime())
                 .vehiclePlate(getVehiclePlate(trip))
+                .vehicleTypeName(getVehicleTypeName(trip))
                 .driverName(getDriverName(trip))
                 .build();
     }
@@ -81,10 +82,11 @@ public class BookingMapper {
     }
 
     /**
-     * Convert list of Ticket entities to TicketInfo DTOs with pre-fetched passengers
+     * Convert list of Ticket entities to TicketInfo DTOs with pre-fetched
+     * passengers
      */
-    private List<BookingResponse.TicketInfo> toTicketInfoList(List<Ticket> tickets, 
-                                                              java.util.Map<Integer, Passenger> passengersByTicketId) {
+    private List<BookingResponse.TicketInfo> toTicketInfoList(List<Ticket> tickets,
+            java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (tickets == null || tickets.isEmpty()) {
             return new ArrayList<>();
         }
@@ -106,15 +108,16 @@ public class BookingMapper {
     /**
      * Convert Ticket entity to TicketInfo DTO with pre-fetched passenger
      */
-    private BookingResponse.TicketInfo toTicketInfo(Ticket ticket, 
-                                                   java.util.Map<Integer, Passenger> passengersByTicketId) {
+    private BookingResponse.TicketInfo toTicketInfo(Ticket ticket,
+            java.util.Map<Integer, Passenger> passengersByTicketId) {
         if (ticket == null) {
             return null;
         }
 
         TripSeat seat = ticket.getSeat();
-        
-        // Get passenger from map if available, otherwise try database (for backward compatibility)
+
+        // Get passenger from map if available, otherwise try database (for backward
+        // compatibility)
         BookingResponse.PassengerInfo passengerInfo = null;
         if (passengersByTicketId != null) {
             Passenger passenger = passengersByTicketId.get(ticket.getTicketId());
@@ -177,6 +180,13 @@ public class BookingMapper {
             return null;
         }
         return trip.getVehicle().getLicensePlate();
+    }
+
+    private String getVehicleTypeName(Trip trip) {
+        if (trip.getVehicle() == null || trip.getVehicle().getVehicleType() == null) {
+            return null;
+        }
+        return trip.getVehicle().getVehicleType().getTypeName();
     }
 
     private String getDriverName(Trip trip) {
