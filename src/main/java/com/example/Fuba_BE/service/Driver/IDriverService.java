@@ -10,11 +10,12 @@ import com.example.Fuba_BE.dto.Driver.CreateDriverWithAccountRequest;
 import com.example.Fuba_BE.dto.Driver.DriverRequestDTO;
 import com.example.Fuba_BE.dto.Driver.DriverResponseDTO;
 import com.example.Fuba_BE.dto.Driver.DriverSelectionDTO;
+import com.example.Fuba_BE.dto.Driver.DriverStatsDTO;
 
 public interface IDriverService {
     List<DriverSelectionDTO> getAllDriversForSelection();
 
-    Page<DriverResponseDTO> getAllDrivers(String keyword, Pageable pageable);
+    Page<DriverResponseDTO> getAllDrivers(String keyword, String status, Integer routeId, Pageable pageable);
 
     DriverResponseDTO getDriverById(Integer id);
 
@@ -25,4 +26,6 @@ public interface IDriverService {
     DriverResponseDTO updateDriver(Integer id, DriverRequestDTO request);
 
     void deleteDriver(Integer id);
+
+    DriverStatsDTO getDriverStats();
 }

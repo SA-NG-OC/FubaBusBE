@@ -285,4 +285,17 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
             "LEFT JOIN FETCH sd.user " +
             "WHERE t.tripId IN :ids")
     List<Trip> findTripsDetailByIds(@Param("ids") List<Integer> ids);
+
+    @Query("SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "LEFT JOIN FETCH t.vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType " +
+            "LEFT JOIN FETCH t.driver d " +
+            "WHERE t.route.routeId = :routeId " +
+            "AND t.departureTime > :afterDateTime " +
+            "ORDER BY t.departureTime ASC")
+    List<Trip> findByRouteAndAfterDateTime(@Param("routeId") Integer routeId,
+                                           @Param("afterDateTime") LocalDateTime afterDateTime);
 }

@@ -14,13 +14,15 @@ import com.example.Fuba_BE.domain.entity.Vehicle;
 
 @Repository
 public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
-    
+
     List<Vehicle> findByStatus(String status);
 
     long countByStatus(String status);
 
+    long countByStatusIgnoreCase(String status);
+
     boolean existsByLicensePlate(String licensePlate);
-    
+
     /**
      * Check if license plate exists excluding current vehicle ID (for update)
      */
@@ -32,7 +34,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
     @Override
     @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.vehicleType")
     Page<Vehicle> findAll(Pageable pageable);
-    
+
     /**
      * Find by ID with vehicle type fetched - avoid N+1
      */
@@ -47,4 +49,22 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
 
     @Query("SELECT v FROM Vehicle v JOIN FETCH v.vehicleType")
     List<Vehicle> findAllWithVehicleType();
+
+    @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.vehicleType WHERE LOWER(v.status) = LOWER(:status)")
+    Page<Vehicle> findByStatusIgnoreCase(@Param("status") String status, Pageable pageable);
+
+    @Query("SELECT DISTINCT v FROM Vehicle v LEFT JOIN FETCH v.vehicleType " +
+            "WHERE LOWER(v.licensePlate) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "AND LOWER(v.status) = LOWER(:status)")
+    Page<Vehicle> findByKeywordAndStatus(@Param("keyword") String keyword, @Param("status") String status,
+            Pageable pageable);
+
+    @Query("SELECT DISTINCT v FROM Vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType vt " +
+            "JOIN VehicleRouteAssignment vra ON vra.vehicle = v " +
+            "WHERE vra.route.routeId = :routeId " +
+            "AND (:keyword IS NULL OR :keyword = '' OR LOWER(v.licensePlate) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+            "AND (:status IS NULL OR :status = '' OR LOWER(v.status) = LOWER(:status))")
+    Page<Vehicle> findByRouteId(@Param("routeId") Integer routeId, @Param("keyword") String keyword,
+            @Param("status") String status, Pageable pageable);
 }

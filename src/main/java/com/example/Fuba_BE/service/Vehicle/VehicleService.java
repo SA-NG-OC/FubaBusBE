@@ -5,6 +5,7 @@ import com.example.Fuba_BE.domain.entity.VehicleType;
 import com.example.Fuba_BE.dto.Vehicle.VehicleRequestDTO;
 import com.example.Fuba_BE.dto.Vehicle.VehicleResponseDTO;
 import com.example.Fuba_BE.dto.Vehicle.VehicleSelectionDTO;
+import com.example.Fuba_BE.dto.Vehicle.VehicleStatsDTO;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.SelectionMapper;
 import com.example.Fuba_BE.mapper.VehicleMapper;
@@ -38,13 +39,27 @@ public class VehicleService implements IVehicleService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<VehicleResponseDTO> getAllVehicles(String keyword, Pageable pageable) {
+    public Page<VehicleResponseDTO> getAllVehicles(String keyword, String status, Integer routeId, Pageable pageable) {
         Page<Vehicle> page;
-        if (keyword == null || keyword.isBlank()) {
-            page = vehicleRepository.findAll(pageable);
-        } else {
+
+        if (routeId != null) {
+            // Filter by route
+            page = vehicleRepository.findByRouteId(routeId, keyword, status, pageable);
+        } else if (status != null && !status.isBlank()) {
+            // Filter by status only
+            if (keyword == null || keyword.isBlank()) {
+                page = vehicleRepository.findByStatusIgnoreCase(status, pageable);
+            } else {
+                page = vehicleRepository.findByKeywordAndStatus(keyword, status, pageable);
+            }
+        } else if (keyword != null && !keyword.isBlank()) {
+            // Filter by keyword only
             page = vehicleRepository.findByLicensePlateContainingIgnoreCase(keyword, pageable);
+        } else {
+            // No filters
+            page = vehicleRepository.findAll(pageable);
         }
+
         return page.map(vehicleMapper::toResponseDTO);
     }
 
@@ -103,5 +118,21 @@ public class VehicleService implements IVehicleService {
             throw new NotFoundException("Vehicle not found with id: " + id);
         }
         vehicleRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VehicleStatsDTO getVehicleStats() {
+        long total = vehicleRepository.count();
+        long operational = vehicleRepository.countByStatusIgnoreCase("Operational");
+        long maintenance = vehicleRepository.countByStatusIgnoreCase("Maintenance");
+        long inactive = vehicleRepository.countByStatusIgnoreCase("Inactive");
+
+        return VehicleStatsDTO.builder()
+                .total(total)
+                .operational(operational)
+                .maintenance(maintenance)
+                .inactive(inactive)
+                .build();
     }
 }

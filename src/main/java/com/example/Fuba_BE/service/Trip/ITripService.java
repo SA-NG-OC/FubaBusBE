@@ -1,12 +1,14 @@
 package com.example.Fuba_BE.service.Trip;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.dto.Trip.AlternativeTripDTO;
 import com.example.Fuba_BE.dto.Trip.CompleteTripRequestDTO;
 import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TicketDetailResponseDTO;
@@ -52,4 +54,7 @@ public interface ITripService {
                         Pageable pageable);
 
         TripDetailedResponseDTO getTripDetailById(Integer tripId);
+
+        List<AlternativeTripDTO> getAlternativeTripsForRoute(Integer routeId, Integer excludeTripId,
+                        LocalDateTime afterDateTime);
 }

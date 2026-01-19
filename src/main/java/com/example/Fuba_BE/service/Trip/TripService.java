@@ -746,6 +746,61 @@ public class TripService implements ITripService {
         return this.enrichTripStats(responseDTO, tripId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.Fuba_BE.dto.Trip.AlternativeTripDTO> getAlternativeTripsForRoute(Integer routeId,
+            Integer excludeTripId, LocalDateTime afterDateTime) {
+        log.info("Fetching alternative trips for route {} after {} excluding trip {}", routeId, afterDateTime,
+                excludeTripId);
+
+        // Fetch trips for the same route that are after the specified datetime
+        List<Trip> trips = tripRepository.findByRouteAndAfterDateTime(routeId, afterDateTime);
+
+        // Filter out the excluded trip and only include Waiting/Running trips
+        return trips.stream()
+                .filter(trip -> !trip.getTripId().equals(excludeTripId))
+                .filter(trip -> "Waiting".equals(trip.getStatus()) || "Running".equals(trip.getStatus()))
+                .map(trip -> {
+                    // Calculate available seats
+                    List<TripSeat> tripSeats = tripSeatRepository.findByTripIdWithSeats(trip.getTripId());
+                    long bookedSeats = tripSeats.stream()
+                            .filter(ts -> ts.getStatus() == SeatStatus.Sold || ts.getStatus() == SeatStatus.Locked)
+                            .count();
+                    int totalSeats = tripSeats.size();
+                    int availableSeats = (int) (totalSeats - bookedSeats);
+
+                    // Build vehicle info
+                    String vehicleInfo = trip.getVehicle() != null
+                            ? trip.getVehicle().getLicensePlate() + " - "
+                                    + (trip.getVehicle().getVehicleType() != null
+                                            ? trip.getVehicle().getVehicleType().getTypeName()
+                                            : "Unknown")
+                            : "N/A";
+
+                    String vehicleTypeName = trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null
+                            ? trip.getVehicle().getVehicleType().getTypeName()
+                            : "N/A";
+
+                    String driverName = trip.getDriver() != null ? trip.getDriver().getFullName() : "N/A";
+
+                    return com.example.Fuba_BE.dto.Trip.AlternativeTripDTO.builder()
+                            .tripId(trip.getTripId())
+                            .routeName(trip.getRoute() != null ? trip.getRoute().getRouteName() : "N/A")
+                            .departureTime(trip.getDepartureTime())
+                            .arrivalTime(trip.getArrivalTime())
+                            .vehicleInfo(vehicleInfo)
+                            .vehicleTypeName(vehicleTypeName)
+                            .driverName(driverName)
+                            .price(trip.getPrice())
+                            .totalSeats(totalSeats)
+                            .availableSeats(availableSeats)
+                            .bookedSeats((int) bookedSeats)
+                            .status(trip.getStatus())
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
     /**
      * Calculate total working hours for a driver on a specific date
      * Counts all trips where driver is main or sub-driver

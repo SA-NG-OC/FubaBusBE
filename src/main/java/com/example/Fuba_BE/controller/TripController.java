@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.controller;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.dto.Trip.AlternativeTripDTO;
 import com.example.Fuba_BE.dto.Trip.CompleteTripRequestDTO;
 import com.example.Fuba_BE.dto.Trip.PassengerOnTripResponseDTO;
 import com.example.Fuba_BE.dto.Trip.TicketDetailResponseDTO;
@@ -168,6 +170,16 @@ public class TripController {
             @PathVariable Integer tripId) {
         List<PassengerOnTripResponseDTO> passengers = tripService.getPassengersOnTrip(tripId);
         return ResponseEntity.ok(ApiResponse.success("Passengers on trip retrieved successfully", passengers));
+    }
+
+    @GetMapping("/alternative")
+    public ResponseEntity<ApiResponse<List<AlternativeTripDTO>>> getAlternativeTrips(
+            @RequestParam Integer routeId,
+            @RequestParam Integer excludeTripId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime afterDateTime) {
+        List<AlternativeTripDTO> alternativeTrips = tripService.getAlternativeTripsForRoute(routeId, excludeTripId,
+                afterDateTime);
+        return ResponseEntity.ok(ApiResponse.success("Alternative trips retrieved successfully", alternativeTrips));
     }
 
     @PutMapping("/{tripId}")

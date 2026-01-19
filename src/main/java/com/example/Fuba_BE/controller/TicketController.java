@@ -5,12 +5,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.Fuba_BE.dto.Ticket.TicketChangeRequestDTO;
+import com.example.Fuba_BE.dto.Ticket.TicketChangeResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketScanResponseDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
@@ -18,6 +23,7 @@ import com.example.Fuba_BE.service.PdfService;
 import com.example.Fuba_BE.service.Ticket.ITicketService;
 import com.example.Fuba_BE.utils.QRCodeGenerator;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -97,5 +103,22 @@ public class TicketController {
                         e.printStackTrace();
                         return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
                 }
+        }
+
+        /**
+         * Change ticket to a different trip on the same route
+         * Only allows changing to trips on the same route
+         * Admin and Staff can change tickets
+         */
+        @PutMapping("/{ticketId}/change")
+        @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+        public ResponseEntity<ApiResponse<TicketChangeResponseDTO>> changeTicket(
+                        @PathVariable Integer ticketId,
+                        @Valid @RequestBody TicketChangeRequestDTO request) {
+                // Set ticketId from path variable
+                request.setTicketId(ticketId);
+
+                TicketChangeResponseDTO response = ticketService.changeTicket(request);
+                return ResponseEntity.ok(ApiResponse.success("Ticket changed successfully", response));
         }
 }

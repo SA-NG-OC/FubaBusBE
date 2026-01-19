@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.Fuba_BE.dto.Vehicle.VehicleRequestDTO;
 import com.example.Fuba_BE.dto.Vehicle.VehicleResponseDTO;
 import com.example.Fuba_BE.dto.Vehicle.VehicleSelectionDTO;
+import com.example.Fuba_BE.dto.Vehicle.VehicleStatsDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Vehicle.IVehicleService;
 
@@ -46,6 +47,13 @@ public class VehicleController {
         return ResponseEntity.ok(ApiResponse.success("Vehicle selection list retrieved", vehicles));
     }
 
+    @GetMapping("/stats")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<VehicleStatsDTO>> getVehicleStats() {
+        VehicleStatsDTO stats = vehicleService.getVehicleStats();
+        return ResponseEntity.ok(ApiResponse.success("Vehicle statistics retrieved", stats));
+    }
+
     /**
      * Get all vehicles with pagination and search
      * ADMIN and STAFF can view vehicles
@@ -54,9 +62,11 @@ public class VehicleController {
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<VehicleResponseDTO>>> getAllVehicles(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer routeId,
             @PageableDefault(page = 0, size = 20, sort = "vehicleId", direction = Sort.Direction.DESC) Pageable pageable) {
-        log.debug("📥 Request to get all vehicles with keyword: {}", keyword);
-        Page<VehicleResponseDTO> vehicles = vehicleService.getAllVehicles(keyword, pageable);
+        log.debug("📥 Request to get all vehicles with keyword: {}, status: {}, routeId: {}", keyword, status, routeId);
+        Page<VehicleResponseDTO> vehicles = vehicleService.getAllVehicles(keyword, status, routeId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Vehicles retrieved successfully", vehicles));
     }
 

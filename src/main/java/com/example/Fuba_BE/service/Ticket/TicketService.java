@@ -3,17 +3,23 @@ package com.example.Fuba_BE.service.Ticket;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.Fuba_BE.domain.entity.Passenger;
 import com.example.Fuba_BE.domain.entity.Ticket;
 import com.example.Fuba_BE.domain.entity.Trip;
+import com.example.Fuba_BE.domain.entity.TripSeat;
 import com.example.Fuba_BE.domain.enums.TicketStatus;
+import com.example.Fuba_BE.dto.Ticket.TicketChangeRequestDTO;
+import com.example.Fuba_BE.dto.Ticket.TicketChangeResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInRequestDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketCheckInResponseDTO;
 import com.example.Fuba_BE.dto.Ticket.TicketExportDTO;
@@ -23,8 +29,8 @@ import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.TicketMapper;
 import com.example.Fuba_BE.repository.PassengerRepository;
 import com.example.Fuba_BE.repository.TicketRepository;
+import com.example.Fuba_BE.repository.TripRepository;
 import com.example.Fuba_BE.repository.TripSeatRepository;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +44,7 @@ public class TicketService implements ITicketService {
     private final PassengerRepository passengerRepository;
     private final TicketMapper ticketMapper;
     private final TripSeatRepository tripSeatRepository;
+    private final TripRepository tripRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Override
@@ -349,5 +356,112 @@ public class TicketService implements ITicketService {
             return "Unknown Route";
         return trip.getRoute().getOrigin().getLocationName() + " → " +
                 trip.getRoute().getDestination().getLocationName();
+    }
+
+    @Override
+    @Transactional
+    public TicketChangeResponseDTO changeTicket(TicketChangeRequestDTO request) {
+
+        log.info("Processing ticket change request: ticketId={}, newTripId={}, newSeatId={}",
+                request.getTicketId(), request.getNewTripId(), request.getNewSeatId());
+
+        // 1. Validate ticket exists and get current data
+        Ticket ticket = ticketRepository.findById(request.getTicketId())
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found"));
+
+        // Only allow changes for Confirmed/Paid tickets, not Used or Cancelled
+        if (!"Confirmed".equalsIgnoreCase(ticket.getTicketStatus()) &&
+                !"Paid".equalsIgnoreCase(ticket.getTicketStatus())) {
+            throw new BadRequestException(
+                    "Only Confirmed or Paid tickets can be changed. Current status: " + ticket.getTicketStatus());
+        }
+
+        TripSeat oldSeat = ticket.getSeat();
+        Trip oldTrip = ticket.getBooking().getTrip();
+
+        // 2. Validate new trip and seat
+        Trip newTrip = tripRepository.findById(request.getNewTripId())
+                .orElseThrow(() -> new ResourceNotFoundException("New trip not found"));
+
+        // Verify trips are on the same route
+        if (!oldTrip.getRoute().getRouteId().equals(newTrip.getRoute().getRouteId())) {
+            throw new BadRequestException(
+                    "Can only change ticket to a trip on the same route. Current route: " +
+                            oldTrip.getRoute().getRouteName() + ", New route: " + newTrip.getRoute().getRouteName());
+        }
+
+        TripSeat newSeat = tripSeatRepository.findById(request.getNewSeatId())
+                .orElseThrow(() -> new ResourceNotFoundException("New seat not found"));
+
+        // Verify seat belongs to new trip
+        if (!newSeat.getTrip().getTripId().equals(newTrip.getTripId())) {
+            throw new BadRequestException("Selected seat does not belong to the new trip");
+        }
+
+        // Verify new seat is available
+        if (!"Available".equalsIgnoreCase(newSeat.getStatus())) {
+            throw new BadRequestException("Selected seat is not available. Current status: " + newSeat.getStatus());
+        }
+
+        // 3. Release old seat
+        oldSeat.setStatus("Available");
+        oldSeat.setLockedBy(null);
+        oldSeat.setHoldExpiry(null);
+        tripSeatRepository.save(oldSeat);
+
+        // 4. Assign new seat
+        newSeat.setStatus("Sold");
+        tripSeatRepository.save(newSeat);
+
+        // 5. Update ticket
+        java.math.BigDecimal oldPrice = ticket.getPrice();
+        java.math.BigDecimal newPrice = newTrip.getBasePrice();
+        java.math.BigDecimal priceDifference = newPrice.subtract(oldPrice);
+
+        ticket.setSeat(newSeat);
+        ticket.setPrice(newPrice);
+        ticketRepository.save(ticket);
+
+        // 6. Broadcast seat updates via WebSocket
+        broadcastSeatUpdate(oldSeat);
+        broadcastSeatUpdate(newSeat);
+
+        // 7. Build response
+        return TicketChangeResponseDTO.builder()
+                .ticketId(ticket.getTicketId())
+                .ticketCode(ticket.getTicketCode())
+                .status(ticket.getTicketStatus())
+                .oldTripId(oldTrip.getTripId())
+                .oldRouteName(buildRouteName(oldTrip))
+                .oldDepartureTime(oldTrip.getDepartureTime())
+                .oldSeatNumber(oldSeat.getSeatNumber())
+                .newTripId(newTrip.getTripId())
+                .newRouteName(buildRouteName(newTrip))
+                .newDepartureTime(newTrip.getDepartureTime())
+                .newSeatNumber(newSeat.getSeatNumber())
+                .oldPrice(oldPrice)
+                .newPrice(newPrice)
+                .priceDifference(priceDifference)
+                .changeReason(request.getReason())
+                .changedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private void broadcastSeatUpdate(TripSeat seat) {
+        try {
+            Map<String, Object> message = new HashMap<>();
+            message.put("seatId", seat.getSeatId());
+            message.put("seatNumber", seat.getSeatNumber());
+            message.put("status", seat.getStatus());
+            message.put("lockedBy", seat.getLockedBy());
+            message.put("holdExpiry", seat.getHoldExpiry());
+            message.put("timestamp", LocalDateTime.now().toString());
+
+            String destination = "/topic/trips/" + seat.getTrip().getTripId() + "/seats";
+            messagingTemplate.convertAndSend((String) destination, (Object) message);
+            log.debug("Broadcasted seat update for seat {} to {}", seat.getSeatNumber(), destination);
+        } catch (Exception e) {
+            log.error("Failed to broadcast seat update: {}", e.getMessage());
+        }
     }
 }

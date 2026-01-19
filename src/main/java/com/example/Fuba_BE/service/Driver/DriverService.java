@@ -8,6 +8,7 @@ import com.example.Fuba_BE.dto.Driver.CreateDriverWithAccountRequest;
 import com.example.Fuba_BE.dto.Driver.DriverRequestDTO;
 import com.example.Fuba_BE.dto.Driver.DriverResponseDTO;
 import com.example.Fuba_BE.dto.Driver.DriverSelectionDTO;
+import com.example.Fuba_BE.dto.Driver.DriverStatsDTO;
 import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.DriverMapper;
@@ -50,10 +51,23 @@ public class DriverService implements IDriverService {
     }
 
     @Override
-    public Page<DriverResponseDTO> getAllDrivers(String keyword, Pageable pageable) {
-        log.debug("Fetching drivers with keyword: {}, page: {}", keyword, pageable.getPageNumber());
+    public Page<DriverResponseDTO> getAllDrivers(String keyword, String status, Integer routeId, Pageable pageable) {
+        log.debug("Fetching drivers with keyword: {}, status: {}, routeId: {}, page: {}",
+                keyword, status, routeId, pageable.getPageNumber());
 
-        Page<Driver> drivers = driverRepository.findAllWithUserAndKeyword(keyword, pageable);
+        Page<Driver> drivers;
+
+        if (routeId != null) {
+            // Filter by route
+            drivers = driverRepository.findByRouteId(routeId, keyword, status, pageable);
+        } else if (status != null && !status.isBlank()) {
+            // Filter by status only
+            drivers = driverRepository.findByStatusAndKeyword(status, keyword, pageable);
+        } else {
+            // Filter by keyword only (or no filter)
+            drivers = driverRepository.findAllWithUserAndKeyword(keyword, pageable);
+        }
+
         return drivers.map(this::mapToResponseDTO);
     }
 
@@ -198,6 +212,24 @@ public class DriverService implements IDriverService {
 
         driverRepository.delete(driver);
         log.info("Deleted driver ID: {}", id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DriverStatsDTO getDriverStats() {
+        long total = driverRepository.count();
+
+        // Count by user status (Active, On Leave, Inactive)
+        long active = driverRepository.countByUserStatus("Active");
+        long onLeave = driverRepository.countByUserStatus("On Leave");
+        long inactive = driverRepository.countByUserStatus("Inactive");
+
+        return DriverStatsDTO.builder()
+                .total(total)
+                .active(active)
+                .onLeave(onLeave)
+                .inactive(inactive)
+                .build();
     }
 
     private DriverResponseDTO mapToResponseDTO(Driver driver) {

@@ -26,6 +26,7 @@ import com.example.Fuba_BE.dto.Driver.CreateDriverWithAccountRequest;
 import com.example.Fuba_BE.dto.Driver.DriverRequestDTO;
 import com.example.Fuba_BE.dto.Driver.DriverResponseDTO;
 import com.example.Fuba_BE.dto.Driver.DriverSelectionDTO;
+import com.example.Fuba_BE.dto.Driver.DriverStatsDTO;
 import com.example.Fuba_BE.payload.ApiResponse;
 import com.example.Fuba_BE.service.Driver.IDriverService;
 
@@ -54,6 +55,16 @@ public class DriverController {
     }
 
     /**
+     * Get driver statistics
+     */
+    @GetMapping("/stats")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ResponseEntity<ApiResponse<DriverStatsDTO>> getDriverStats() {
+        DriverStatsDTO stats = driverService.getDriverStats();
+        return ResponseEntity.ok(ApiResponse.success("Driver statistics retrieved", stats));
+    }
+
+    /**
      * Get all drivers with pagination and search
      * ADMIN and STAFF can view drivers
      */
@@ -61,9 +72,11 @@ public class DriverController {
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<DriverResponseDTO>>> getAllDrivers(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Integer routeId,
             @PageableDefault(page = 0, size = 20, sort = "driverId", direction = Sort.Direction.DESC) Pageable pageable) {
-        log.debug("📥 Request to get all drivers with keyword: {}", keyword);
-        Page<DriverResponseDTO> drivers = driverService.getAllDrivers(keyword, pageable);
+        log.debug("📥 Request to get all drivers with keyword: {}, status: {}, routeId: {}", keyword, status, routeId);
+        Page<DriverResponseDTO> drivers = driverService.getAllDrivers(keyword, status, routeId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Drivers retrieved successfully", drivers));
     }
 
