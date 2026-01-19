@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,8 @@ import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.TicketMapper;
 import com.example.Fuba_BE.repository.PassengerRepository;
 import com.example.Fuba_BE.repository.TicketRepository;
+import com.example.Fuba_BE.repository.TripSeatRepository;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,10 +37,14 @@ public class TicketService implements ITicketService {
     private final TicketRepository ticketRepository;
     private final PassengerRepository passengerRepository;
     private final TicketMapper ticketMapper;
+    private final TripSeatRepository tripSeatRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
+    @Cacheable(value = "tickets", key = "#ticketCode", unless = "#result == null")
     @Transactional(readOnly = true)
     public TicketScanResponseDTO getTicketDetailsByCode(String ticketCode) {
+        log.debug("Cache miss - fetching ticket from DB: {}", ticketCode);
         Ticket ticket = ticketRepository.findByTicketCode(ticketCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with code: " + ticketCode));
 
@@ -112,6 +120,7 @@ public class TicketService implements ITicketService {
     // --- [NEW] Method lấy dữ liệu thật để xuất PDF ---
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "tickets", key = "'export:' + #ticketId")
     public TicketExportDTO getTicketExportData(Integer ticketId) {
         // 1. Lấy thông tin vé từ DB
         Ticket ticket = ticketRepository.findById(ticketId)
@@ -193,9 +202,10 @@ public class TicketService implements ITicketService {
      * We simplified: Confirmed → Used (one step instead of two)
      */
     @Override
+    @CacheEvict(value = "tickets", allEntries = true) // Evict all ticket caches (lookup + export) when status changes
     @Transactional
     public boolean confirmTicket(String ticketCode) {
-        log.info("Confirming ticket: {}", ticketCode);
+        log.info("Confirming ticket: {} (will evict all ticket caches)", ticketCode);
 
         // 1. Find ticket with pessimistic lock (prevent concurrent confirmations)
         Ticket ticket = ticketRepository.findByTicketCodeWithLock(ticketCode)
@@ -210,6 +220,30 @@ public class TicketService implements ITicketService {
             // Normal flow: Confirmed → Used
             ticket.setTicketStatus(TicketStatus.USED.getDisplayName());
             ticketRepository.save(ticket);
+
+            // Also mark the associated TripSeat as Used so trip stats and seat map reflect
+            // check-in
+            TripSeat seat = ticket.getSeat();
+            if (seat != null) {
+                seat.setStatus("Used");
+                tripSeatRepository.save(seat);
+
+                // Broadcast seat update to WebSocket topic so frontends can refresh
+                try {
+                    Map<String, Object> message = new HashMap<>();
+                    message.put("seatId", seat.getSeatId());
+                    message.put("seatNumber", seat.getSeatNumber());
+                    message.put("status", seat.getStatus());
+                    message.put("lockedBy", seat.getLockedBy());
+                    message.put("holdExpiry", seat.getHoldExpiry());
+                    message.put("timestamp", java.time.LocalDateTime.now().toString());
+                    String destination = "/topic/trips/" + ticket.getBooking().getTrip().getTripId() + "/seats";
+                    messagingTemplate.convertAndSend(destination, (Object) message);
+                } catch (Exception ex) {
+                    log.warn("Failed to broadcast seat update after ticket confirm: {}", ex.getMessage());
+                }
+            }
+
             log.info("Ticket {} confirmed successfully. Status changed to Used", ticketCode);
             return true;
         } else if ("CheckedIn".equals(currentStatus)) {

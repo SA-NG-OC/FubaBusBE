@@ -24,19 +24,24 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
     @Query("SELECT COUNT(t) FROM Ticket t WHERE t.ticketStatus IN ('Confirmed', 'USED') AND t.createdAt BETWEEN :start AND :end")
     long countSoldTickets(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    @EntityGraph(attributePaths = {
-            "booking",
-            "booking.trip",
-            "booking.trip.route",
-            "booking.trip.route.origin",
-            "booking.trip.route.destination",
-            "booking.trip.vehicle",
-            "booking.trip.vehicle.vehicleType",
-            "booking.trip.driver",
-            "booking.trip.driver.user",
-            "seat"
-    })
-    Optional<Ticket> findByTicketCode(String ticketCode);
+    /**
+     * Optimized query for ticket lookup with all required relationships.
+     * Uses JOIN FETCH to load everything in one query (no N+1).
+     * Cached in service layer for repeated scans.
+     */
+    @Query("SELECT DISTINCT t FROM Ticket t " +
+            "JOIN FETCH t.booking b " +
+            "JOIN FETCH b.trip tr " +
+            "LEFT JOIN FETCH tr.route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "LEFT JOIN FETCH tr.vehicle v " +
+            "LEFT JOIN FETCH v.vehicleType " +
+            "LEFT JOIN FETCH tr.driver d " +
+            "LEFT JOIN FETCH d.user " +
+            "JOIN FETCH t.seat " +
+            "WHERE t.ticketCode = :ticketCode")
+    Optional<Ticket> findByTicketCode(@Param("ticketCode") String ticketCode);
 
     /**
      * Find ticket by code with pessimistic lock for check-in
@@ -79,6 +84,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Integer> {
             "JOIN t.booking b " +
             "WHERE b.trip.tripId = :tripId")
     List<Ticket> findByTripId(@Param("tripId") Integer tripId);
+
+    /**
+     * Count tickets for a trip with a specific ticketStatus (case-insensitive)
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t JOIN t.booking b WHERE b.trip.tripId = :tripId AND LOWER(t.ticketStatus) = LOWER(:status)")
+    long countTicketsByTripIdAndStatus(@Param("tripId") Integer tripId, @Param("status") String status);
 
     /**
      * Find all tickets for a trip including cancelled ones to show complete seat

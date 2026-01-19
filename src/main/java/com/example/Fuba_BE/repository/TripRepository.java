@@ -158,24 +158,25 @@ public interface TripRepository extends JpaRepository<Trip, Integer>, JpaSpecifi
     // PHẦN 4: CHECK TRÙNG & ANALYTICS CÒN LẠI
     // =========================================================================
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
+    // Queries without status filter - check time overlap regardless of trip status
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
     boolean existsByVehicleAndOverlap(@Param("vehicleId") Integer vehicleId,
             @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
     boolean existsByVehicleAndOverlapExcludingTrip(@Param("vehicleId") Integer vehicleId,
             @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime,
             @Param("excludeTripId") Integer excludeTripId);
 
-    @Query("SELECT t FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
+    @Query("SELECT t FROM Trip t WHERE t.vehicle.vehicleId = :vehicleId AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
     List<Trip> findConflictingTripsForVehicle(@Param("vehicleId") Integer vehicleId,
             @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND (t.departureTime < :endTime AND t.arrivalTime > :startTime)")
     boolean isPersonBusy(@Param("personId") Integer personId, @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 
-    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND t.status IN ('Waiting', 'Running') AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
+    @Query("SELECT COUNT(t) > 0 FROM Trip t WHERE (t.driver.driverId = :personId OR t.subDriver.driverId = :personId) AND (t.departureTime < :endTime AND t.arrivalTime > :startTime) AND t.tripId != :excludeTripId")
     boolean isPersonBusyExcludingTrip(@Param("personId") Integer personId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime, @Param("excludeTripId") Integer excludeTripId);

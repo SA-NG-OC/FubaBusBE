@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +22,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.Fuba_BE.config.CacheConfig;
 import com.example.Fuba_BE.domain.entity.Booking;
 import com.example.Fuba_BE.domain.entity.Passenger;
 import com.example.Fuba_BE.domain.entity.Refund;
@@ -74,6 +77,7 @@ public class BookingService implements IBookingService {
     private final BookingMapper bookingMapper;
     private final SimpMessagingTemplate messagingTemplate;
     private final IAuditLogService auditLogService;
+    private final CacheManager cacheManager;
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -256,6 +260,18 @@ public class BookingService implements IBookingService {
         }
 
         log.info("Booking {} created with Held status and {} tickets", bookingCode, tickets.size());
+
+        // Invalidate my-tickets cache because a new booking was created
+        try {
+            Cache cache = cacheManager.getCache(CacheConfig.CACHE_MY_TICKETS);
+            if (cache != null) {
+                cache.clear();
+                log.info("Cleared my-tickets cache after booking create: {}", bookingCode);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to clear my-tickets cache after booking create: {}", ex.getMessage());
+        }
+
         return bookingMapper.toBookingResponse(booking, trip, tickets);
     }
 
@@ -355,6 +371,17 @@ public class BookingService implements IBookingService {
         }
 
         log.info("Counter booking {} created successfully with {} tickets", bookingCode, tickets.size());
+        // Clear my-tickets cache after counter booking
+        try {
+            Cache cache = cacheManager.getCache(CacheConfig.CACHE_MY_TICKETS);
+            if (cache != null) {
+                cache.clear();
+                log.info("Cleared my-tickets cache after counter booking: {}", bookingCode);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to clear my-tickets cache after counter booking: {}", ex.getMessage());
+        }
+
         return bookingMapper.toBookingResponse(booking, trip, tickets);
     }
 
@@ -580,6 +607,17 @@ public class BookingService implements IBookingService {
                 tripSeatRepository.save(seat);
                 broadcastSeatUpdate(booking.getTrip().getTripId(), seat);
             }
+        }
+
+        // Clear my-tickets cache after cancellation
+        try {
+            Cache cache = cacheManager.getCache(CacheConfig.CACHE_MY_TICKETS);
+            if (cache != null) {
+                cache.clear();
+                log.info("Cleared my-tickets cache after cancelling booking: {}", bookingId);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to clear my-tickets cache after cancellation: {}", ex.getMessage());
         }
 
         // Calculate refund based on cancellation policy
@@ -1151,6 +1189,19 @@ public class BookingService implements IBookingService {
     public BookingPageResponse getMyTickets(Integer userId, String status, Integer page, Integer size) {
         log.info("Get my tickets for user {}: status={}, page={}, size={}", userId, status, page, size);
 
+        // Try cache first
+        Cache cache = cacheManager.getCache(CacheConfig.CACHE_MY_TICKETS);
+        String cacheKey = String.format("user:%d|status:%s|p:%d|s:%d", userId, (status == null ? "ALL" : status), page,
+                size);
+        if (cache != null) {
+            BookingPageResponse cached = cache.get(cacheKey, BookingPageResponse.class);
+            if (cached != null) {
+                log.info("Cache hit for my-tickets -> {}", cacheKey);
+                return cached;
+            }
+            log.info("Cache miss for my-tickets -> {}", cacheKey);
+        }
+
         // Validate user exists
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy người dùng với ID: " + userId));
@@ -1179,14 +1230,29 @@ public class BookingService implements IBookingService {
             bookingPage = bookingRepository.findByCustomerAndBookingStatus(user, status, pageable);
         }
 
+        // Avoid N+1: batch-load bookings with details and tickets
+        List<Integer> bookingIds = bookingPage.getContent().stream()
+                .map(b -> b.getBookingId())
+                .collect(Collectors.toList());
+
+        List<Booking> bookingsWithDetails = bookingIds.isEmpty() ? List.of()
+                : bookingRepository.findByIdsWithDetails(bookingIds);
+        Map<Integer, Booking> bookingById = bookingsWithDetails.stream()
+                .collect(Collectors.toMap(Booking::getBookingId, b -> b));
+
+        List<Ticket> allTickets = bookingIds.isEmpty() ? List.of() : ticketRepository.findByBookingIds(bookingIds);
+        Map<Integer, List<Ticket>> ticketsByBookingId = allTickets.stream()
+                .collect(Collectors.groupingBy(t -> t.getBooking().getBookingId()));
+
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
                 .map(booking -> {
-                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
-                    return bookingMapper.toBookingResponse(booking, booking.getTrip(), tickets);
+                    Booking detailed = bookingById.getOrDefault(booking.getBookingId(), booking);
+                    List<Ticket> tickets = ticketsByBookingId.getOrDefault(booking.getBookingId(), List.of());
+                    return bookingMapper.toBookingResponse(detailed, detailed.getTrip(), tickets);
                 })
                 .collect(Collectors.toList());
 
-        return BookingPageResponse.builder()
+        BookingPageResponse result = BookingPageResponse.builder()
                 .bookings(bookingResponses)
                 .currentPage(bookingPage.getNumber())
                 .pageSize(bookingPage.getSize())
@@ -1195,6 +1261,13 @@ public class BookingService implements IBookingService {
                 .isFirst(bookingPage.isFirst())
                 .isLast(bookingPage.isLast())
                 .build();
+
+        if (cache != null) {
+            cache.put(cacheKey, result);
+            log.info("Stored my-tickets result in cache -> {}", cacheKey);
+        }
+
+        return result;
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.example.Fuba_BE.service.Trip;
 
 import java.math.BigDecimal; // [NEW] Cần import để ép kiểu so sánh giá
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -60,6 +61,8 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 @lombok.extern.slf4j.Slf4j
 public class TripService implements ITripService {
+
+    private static final double MAX_WORKING_HOURS = 10.0; // Maximum driver working hours per day
 
     private final TripRepository tripRepository;
     private final RouteRepository routeRepository;
@@ -380,6 +383,39 @@ public class TripService implements ITripService {
             }
         }
 
+        // === KIỂM TRA THỜI GIAN LÀM VIỆC TRONG NGÀY ===
+        LocalDate tripDate = departureTime.toLocalDate();
+        log.info("=== CHECKING DAILY WORKING HOURS ===");
+
+        // Check main driver's daily hours
+        double driverCurrentHours = calculateDriverHoursOnDate(request.getDriverId(), tripDate);
+        double totalDriverHours = driverCurrentHours + durationHours;
+        log.info("Driver {} current hours on {}: {}, new trip: {}, total: {}",
+                driver.getUser().getFullName(), tripDate, driverCurrentHours, durationHours, totalDriverHours);
+
+        if (totalDriverHours > MAX_WORKING_HOURS) {
+            throw new BadRequestException(String.format(
+                    "Tài xế %s đã làm %.1f giờ ngày %s. Thêm chuyến %.1f giờ sẽ vượt giới hạn %d giờ/ngày!",
+                    driver.getUser().getFullName(), driverCurrentHours, tripDate, durationHours,
+                    (int) MAX_WORKING_HOURS));
+        }
+
+        // Check sub-driver's daily hours if exists
+        if (subDriver != null) {
+            double subDriverCurrentHours = calculateDriverHoursOnDate(subDriver.getDriverId(), tripDate);
+            double totalSubDriverHours = subDriverCurrentHours + durationHours;
+            log.info("Sub-driver {} current hours on {}: {}, new trip: {}, total: {}",
+                    subDriver.getUser().getFullName(), tripDate, subDriverCurrentHours, durationHours,
+                    totalSubDriverHours);
+
+            if (totalSubDriverHours > MAX_WORKING_HOURS) {
+                throw new BadRequestException(String.format(
+                        "Phụ xe %s đã làm %.1f giờ ngày %s. Thêm chuyến %.1f giờ sẽ vượt giới hạn %d giờ/ngày!",
+                        subDriver.getUser().getFullName(), subDriverCurrentHours, tripDate, durationHours,
+                        (int) MAX_WORKING_HOURS));
+            }
+        }
+
         log.info("No conflicts found. Creating trip...");
 
         Trip trip = new Trip();
@@ -495,8 +531,9 @@ public class TripService implements ITripService {
     public TripDetailedResponseDTO enrichTripStats(TripDetailedResponseDTO dto, Integer tripId) {
         int booked = tripRepository.countBookedSeats(tripId);
         dto.setBookedSeats(booked);
-        int checkedIn = tripRepository.countCheckedInSeats(tripId);
-        dto.setCheckedInSeats(checkedIn);
+        // Count checked-in by counting tickets with status 'Used'
+        long usedTickets = ticketRepository.countTicketsByTripIdAndStatus(tripId, "Used");
+        dto.setCheckedInSeats((int) usedTickets);
         return dto;
     }
 
@@ -703,5 +740,21 @@ public class TripService implements ITripService {
         }
 
         return this.enrichTripStats(responseDTO, tripId);
+    }
+
+    /**
+     * Calculate total working hours for a driver on a specific date
+     * Counts all trips where driver is main or sub-driver
+     */
+    private double calculateDriverHoursOnDate(Integer driverId, LocalDate date) {
+        List<Trip> trips = tripRepository.findTripsByDriverAndDate(driverId, date);
+
+        double totalHours = 0.0;
+        for (Trip trip : trips) {
+            Duration duration = Duration.between(trip.getDepartureTime(), trip.getArrivalTime());
+            totalHours += duration.toMinutes() / 60.0;
+        }
+
+        return totalHours;
     }
 }

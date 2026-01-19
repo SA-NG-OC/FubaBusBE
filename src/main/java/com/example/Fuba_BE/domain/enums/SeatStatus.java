@@ -7,7 +7,8 @@ package com.example.Fuba_BE.domain.enums;
 public enum SeatStatus {
     Available("Available"),
     Held("Held"),
-    Booked("Booked");
+    Booked("Booked"),
+    Used("Used");
 
     private final String displayName;
 
@@ -21,6 +22,7 @@ public enum SeatStatus {
 
     /**
      * Converts a display name string to the corresponding SeatStatus enum.
+     * 
      * @param displayName The status name
      * @return The corresponding SeatStatus enum
      */

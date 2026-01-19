@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * - driverAssignments: Changes occasionally, 5 min TTL, max 500 entries
  * - vehicleAssignments: Changes occasionally, 5 min TTL, max 500 entries
  * - tripTemplates: Semi-static, 10 min TTL, max 200 entries
+ * - tickets: Ticket lookups, 5 min TTL, max 1000 entries (evicted on confirm)
  */
 @Configuration
 @EnableCaching
@@ -40,6 +41,8 @@ public class CacheConfig {
     public static final String CACHE_DRIVER_ASSIGNMENTS = "driverAssignments";
     public static final String CACHE_VEHICLE_ASSIGNMENTS = "vehicleAssignments";
     public static final String CACHE_TRIP_TEMPLATES = "tripTemplates";
+    public static final String CACHE_MY_TICKETS = "myTickets";
+    public static final String CACHE_TICKETS = "tickets";
 
     @Bean
     public CacheManager cacheManager() {
@@ -65,6 +68,8 @@ public class CacheConfig {
                 CACHE_VEHICLE_TYPES_ALL,
                 CACHE_DRIVER_ASSIGNMENTS,
                 CACHE_VEHICLE_ASSIGNMENTS,
+                CACHE_TICKETS,
+                CACHE_MY_TICKETS,
                 CACHE_TRIP_TEMPLATES));
 
         log.info("✅ Cache Manager initialized with {} caches", cacheManager.getCacheNames().size());
