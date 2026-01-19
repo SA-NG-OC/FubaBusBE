@@ -199,12 +199,8 @@ public class PaymentController {
 
         log.info("🔄 MoMo redirect: orderId={}, resultCode={}, transId={}", orderId, resultCode, transId);
         
-        // Extract booking code from orderId (format: BK20260119021-1737285600123)
-        String bookingCode = orderId.contains("-") ? orderId.substring(0, orderId.lastIndexOf("-")) : orderId;
-        
         Map<String, Object> data = new HashMap<>();
         data.put("orderId", orderId);
-        data.put("bookingCode", bookingCode);
         data.put("requestId", requestId);
         data.put("resultCode", resultCode);
         data.put("transId", transId);
@@ -213,7 +209,7 @@ public class PaymentController {
         // Check booking status and sync if needed
         String bookingStatus = "Unknown";
         try {
-            Booking booking = bookingRepository.findByBookingCode(bookingCode).orElse(null);
+            Booking booking = bookingRepository.findByBookingCode(orderId).orElse(null);
             if (booking != null) {
                 bookingStatus = booking.getBookingStatus();
                 data.put("bookingStatus", bookingStatus);
@@ -221,7 +217,7 @@ public class PaymentController {
                 // If payment successful but booking still Pending, IPN might not have arrived
                 // yet
                 if (resultCode == 0 && "Pending".equals(bookingStatus)) {
-                    log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", bookingCode);
+                    log.warn("⚠️ Payment successful but booking {} still Pending. IPN may be delayed.", orderId);
                     
                     // Query MoMo status and manually complete payment if confirmed
                     if (requestId != null && !requestId.isEmpty()) {
@@ -239,19 +235,22 @@ public class PaymentController {
                                 manualIpn.setRequestId(requestId);
                                 manualIpn.setResultCode(0);
                                 manualIpn.setMessage("Success");
-                                manualIpn.setTransId(transId != null ? transId : 0L); // Use transId from redirect
-                                                                                      // params
+                                manualIpn.setTransId(transId != null ? transId : 0L);
                                 manualIpn.setAmount(momoStatus.getAmount());
+                                manualIpn.setSkipSignatureCheck(true); // Skip signature check for manual IPN
+                                manualIpn.setOrderInfo(momoStatus.getOrderInfo() != null ? momoStatus.getOrderInfo() : "");
+                                manualIpn.setPartnerCode(momoStatus.getPartnerCode() != null ? momoStatus.getPartnerCode() : "");
+                                manualIpn.setResponseTime(System.currentTimeMillis());
 
                                 boolean completed = momoPaymentService.handleIpnCallback(manualIpn);
 
                                 if (completed) {
-                                    log.info("🎉 Payment manually completed for booking {}", bookingCode);
+                                    log.info("🎉 Payment manually completed for booking {}", orderId);
                                     bookingStatus = "Paid";
                                     data.put("bookingStatus", bookingStatus);
                                     data.put("note", "Payment completed successfully.");
                                 } else {
-                                    log.error("❌ Failed to manually complete payment for booking {}", bookingCode);
+                                    log.error("❌ Failed to manually complete payment for booking {}", orderId);
                                     data.put("note", "Payment confirmed but processing failed. Please contact support.");
                                 }
                             }
@@ -263,11 +262,11 @@ public class PaymentController {
                         data.put("note", "Payment confirmed. Booking update in progress.");
                     }
                 } else if (resultCode == 0 && "Paid".equals(bookingStatus)) {
-                    log.info("✅ Booking {} already marked as Paid", bookingCode);
+                    log.info("✅ Booking {} already marked as Paid", orderId);
                     data.put("note", "Payment completed successfully.");
                 }
             } else {
-                log.error("❌ Booking not found: {}", bookingCode);
+                log.error("❌ Booking not found: {}", orderId);
                 data.put("bookingStatus", "NotFound");
             }
         } catch (Exception e) {

@@ -75,11 +75,9 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
 
         // 2. Generate unique request ID and prepare payment data
         String requestId = UUID.randomUUID().toString();
-        // Generate unique orderId by appending timestamp to allow retry payments
-        // Format: BK20260119021-1737285600123
-        String orderId = booking.getBookingCode() + "-" + System.currentTimeMillis();
+        String orderId = booking.getBookingCode();
         String amount = booking.getTotalAmount().toBigInteger().toString();
-        String orderInfo = "Thanh toan ve xe - " + booking.getBookingCode(); // Keep original code in description
+        String orderInfo = "Thanh toan ve xe - " + orderId;
         String extraData = ""; // Can encode additional data in base64 if needed
         String lang = "vi";
 
@@ -216,16 +214,14 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
 
         // 2. Find booking by order ID (booking code) WITH PESSIMISTIC LOCK to prevent
         // race conditions
-        // Extract booking code from orderId (format: BK20260119021-1737285600123)
         String orderId = ipnRequest.getOrderId();
-        String bookingCode = orderId.contains("-") ? orderId.substring(0, orderId.lastIndexOf("-")) : orderId;
         
-        log.debug("Looking for booking with code: {} (from orderId: {})", bookingCode, orderId);
-        Booking booking = bookingRepository.findByBookingCodeWithLock(bookingCode)
+        log.debug("Looking for booking with code: {}", orderId);
+        Booking booking = bookingRepository.findByBookingCodeWithLock(orderId)
                 .orElse(null);
 
         if (booking == null) {
-            log.error("❌ Booking not found for bookingCode: {} (orderId: {})", bookingCode, orderId);
+            log.error("❌ Booking not found for orderId: {}", orderId);
             return false;
         }
 
