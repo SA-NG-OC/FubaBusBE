@@ -95,4 +95,6 @@ public interface IUserService {
      * Get customers (role USER) with search and filter
      */
     Page<UserResponseDTO> getCustomers(String search, String status, Pageable pageable);
+
+    Page<UserResponseDTO> getAllUsers(Integer roleId, String keyword, Pageable pageable);
 }
