@@ -762,9 +762,11 @@ public class TripService implements ITripService {
                 .filter(trip -> "Waiting".equals(trip.getStatus()) || "Running".equals(trip.getStatus()))
                 .map(trip -> {
                     // Calculate available seats
-                    List<TripSeat> tripSeats = tripSeatRepository.findByTripIdWithSeats(trip.getTripId());
+                    List<TripSeat> tripSeats = tripSeatRepository
+                            .findByTrip_TripIdOrderByFloorNumberAscSeatNumberAsc(trip.getTripId());
                     long bookedSeats = tripSeats.stream()
-                            .filter(ts -> ts.getStatus() == SeatStatus.Sold || ts.getStatus() == SeatStatus.Locked)
+                            .filter(ts -> "Booked".equals(ts.getStatus()) || "Held".equals(ts.getStatus())
+                                    || "Used".equals(ts.getStatus()))
                             .count();
                     int totalSeats = tripSeats.size();
                     int availableSeats = (int) (totalSeats - bookedSeats);
@@ -781,7 +783,9 @@ public class TripService implements ITripService {
                             ? trip.getVehicle().getVehicleType().getTypeName()
                             : "N/A";
 
-                    String driverName = trip.getDriver() != null ? trip.getDriver().getFullName() : "N/A";
+                    String driverName = trip.getDriver() != null && trip.getDriver().getUser() != null
+                            ? trip.getDriver().getUser().getFullName()
+                            : "N/A";
 
                     return com.example.Fuba_BE.dto.Trip.AlternativeTripDTO.builder()
                             .tripId(trip.getTripId())
@@ -791,7 +795,7 @@ public class TripService implements ITripService {
                             .vehicleInfo(vehicleInfo)
                             .vehicleTypeName(vehicleTypeName)
                             .driverName(driverName)
-                            .price(trip.getPrice())
+                            .price(trip.getBasePrice().doubleValue())
                             .totalSeats(totalSeats)
                             .availableSeats(availableSeats)
                             .bookedSeats((int) bookedSeats)
