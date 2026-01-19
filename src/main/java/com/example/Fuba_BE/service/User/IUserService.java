@@ -88,4 +88,11 @@ public interface IUserService {
      * Delete avatar for user (revert to default)
      */
     ProfileResponseDTO deleteAvatar(Integer userId);
+
+    // --- Customer Management (Admin) ---
+
+    /**
+     * Get customers (role USER) with search and filter
+     */
+    Page<UserResponseDTO> getCustomers(String search, String status, Pageable pageable);
 }

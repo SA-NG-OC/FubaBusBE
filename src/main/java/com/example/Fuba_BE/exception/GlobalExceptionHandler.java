@@ -3,6 +3,7 @@ package com.example.Fuba_BE.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -127,6 +128,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error("Resource not found", "NOT_FOUND"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        String message = "Data integrity violation";
+
+        // Extract user-friendly message from constraint violation
+        String exceptionMessage = ex.getMessage();
+        if (exceptionMessage != null) {
+            if (exceptionMessage.contains("vehicles_licenseplate_key")) {
+                message = "Biển số xe đã tồn tại trong hệ thống";
+            } else if (exceptionMessage.contains("duplicate key")) {
+                message = "Dữ liệu bị trùng lặp";
+            } else if (exceptionMessage.contains("foreign key constraint")) {
+                message = "Không thể xóa vì dữ liệu đang được sử dụng";
+            } else if (exceptionMessage.contains("not-null constraint")) {
+                message = "Thiếu thông tin bắt buộc";
+            }
+        }
+
+        log.warn("Data integrity violation: {}", message);
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(message, "CONFLICT"));
     }
 
     @ExceptionHandler(Exception.class)

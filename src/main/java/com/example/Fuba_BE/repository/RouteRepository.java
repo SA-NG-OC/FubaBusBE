@@ -18,39 +18,36 @@ import com.example.Fuba_BE.domain.entity.Route;
 public interface RouteRepository extends JpaRepository<Route, Integer> {
 
     @Query(value = """
-        SELECT DISTINCT r
-        FROM Route r
-        LEFT JOIN FETCH r.origin o
-        LEFT JOIN FETCH r.destination d
-        LEFT JOIN r.routeStops rs
-        LEFT JOIN rs.location l
-        WHERE
-            (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-    """,
-            countQuery = """
-        SELECT count(DISTINCT r)
-        FROM Route r
-        LEFT JOIN r.origin o
-        LEFT JOIN r.destination d
-        LEFT JOIN r.routeStops rs
-        LEFT JOIN rs.location l
-        WHERE
-            (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-            OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-    """)
+                SELECT DISTINCT r
+                FROM Route r
+                LEFT JOIN FETCH r.origin o
+                LEFT JOIN FETCH r.destination d
+                LEFT JOIN r.routeStops rs
+                LEFT JOIN rs.location l
+                WHERE
+                    (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            """, countQuery = """
+                SELECT count(DISTINCT r)
+                FROM Route r
+                LEFT JOIN r.origin o
+                LEFT JOIN r.destination d
+                LEFT JOIN r.routeStops rs
+                LEFT JOIN rs.location l
+                WHERE
+                    (:keyword IS NULL OR LOWER(r.routeName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(o.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(d.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+                    OR (:keyword IS NULL OR LOWER(l.locationName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            """)
     Page<Route> searchRoutes(
             @Param("keyword") String keyword,
-            Pageable pageable
-    );
+            Pageable pageable);
 
     @Override
-    @Query(value = "SELECT r FROM Route r LEFT JOIN FETCH r.origin LEFT JOIN FETCH r.destination",
-            countQuery = "SELECT count(r) FROM Route r")
+    @Query(value = "SELECT r FROM Route r LEFT JOIN FETCH r.origin LEFT JOIN FETCH r.destination", countQuery = "SELECT count(r) FROM Route r")
     Page<Route> findAll(Pageable pageable);
 
     List<Route> findByStatus(String status);
@@ -59,23 +56,21 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
     boolean existsByOriginAndDestination(Location origin, Location destination);
 
     @Query(value = """
-           SELECT 
-               r.routeid, 
-               r.routename, 
-               COALESCE(SUM(tc.revenue), 0) as totalRevenue, 
-               COUNT(DISTINCT t.vehicleid) as vehicleCount, 
-               COUNT(DISTINCT t.driverid) as driverCount 
-           FROM routes r 
-           LEFT JOIN trips t ON t.routeid = r.routeid AND t.departuretime BETWEEN :start AND :end 
-           LEFT JOIN tripcosts tc ON tc.tripid = t.tripid 
-           GROUP BY r.routeid, r.routename
-           ORDER BY totalRevenue DESC 
-           """,
-            countQuery = "SELECT count(*) FROM routes",
-            nativeQuery = true)
+            SELECT
+                r.routeid,
+                r.routename,
+                COALESCE(SUM(tc.revenue), 0) as totalRevenue,
+                COUNT(DISTINCT t.vehicleid) as vehicleCount,
+                COUNT(DISTINCT t.driverid) as driverCount
+            FROM routes r
+            LEFT JOIN trips t ON t.routeid = r.routeid AND t.departuretime BETWEEN :start AND :end
+            LEFT JOIN tripcosts tc ON tc.tripid = t.tripid
+            GROUP BY r.routeid, r.routename
+            ORDER BY totalRevenue DESC
+            """, countQuery = "SELECT count(*) FROM routes", nativeQuery = true)
     Page<Object[]> findRoutesWithAnalytics(@Param("start") LocalDateTime start,
-                                           @Param("end") LocalDateTime end,
-                                           Pageable pageable);
+            @Param("end") LocalDateTime end,
+            Pageable pageable);
 
     // =========================================================================
     // TRIP GENERATION - REVERSE ROUTE LOOKUP
@@ -86,11 +81,32 @@ public interface RouteRepository extends JpaRepository<Route, Integer> {
      * Example: If route is HN → DN, find DN → HN
      */
     @Query("SELECT r FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
-    Optional<Route> findByOriginAndDestination(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
+    Optional<Route> findByOriginAndDestination(@Param("originId") Integer originId,
+            @Param("destinationId") Integer destinationId);
 
     /**
      * Check if reverse route exists
      */
     @Query("SELECT COUNT(r) > 0 FROM Route r WHERE r.origin.locationId = :destinationId AND r.destination.locationId = :originId AND r.status = 'Hoạt động'")
     boolean existsReverseRoute(@Param("originId") Integer originId, @Param("destinationId") Integer destinationId);
+
+    /**
+     * Find route by ID with origin and destination (for avoiding
+     * LazyInitializationException)
+     */
+    @Query("SELECT r FROM Route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "WHERE r.routeId = :routeId")
+    Optional<Route> findByIdWithLocations(@Param("routeId") Integer routeId);
+
+    /**
+     * Find all active routes with locations
+     */
+    @Query("SELECT r FROM Route r " +
+            "LEFT JOIN FETCH r.origin " +
+            "LEFT JOIN FETCH r.destination " +
+            "WHERE r.status = 'Active' OR r.status = 'Hoạt động' " +
+            "ORDER BY r.routeId ASC")
+    List<Route> findAllActiveWithLocations();
 }

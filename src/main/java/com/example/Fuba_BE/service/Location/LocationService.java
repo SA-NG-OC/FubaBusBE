@@ -1,5 +1,16 @@
 package com.example.Fuba_BE.service.Location;
 
+import java.util.List;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.Fuba_BE.config.CacheConfig;
 import com.example.Fuba_BE.domain.entity.Location;
 import com.example.Fuba_BE.dto.Location.CreateLocationRequestDTO;
 import com.example.Fuba_BE.dto.Location.LocationResponseDTO;
@@ -7,14 +18,9 @@ import com.example.Fuba_BE.dto.Location.UpdateLocationRequestDTO;
 import com.example.Fuba_BE.exception.NotFoundException;
 import com.example.Fuba_BE.mapper.LocationMapper;
 import com.example.Fuba_BE.repository.LocationRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +32,9 @@ public class LocationService implements ILocationService {
     private final LocationMapper locationMapper;
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_LOCATIONS_ALL)
     public List<LocationResponseDTO> getAllLocations() {
+        log.debug("📥 Cache MISS - Fetching all locations from database");
         return locationRepository.findAllBasic();
     }
 
@@ -52,8 +60,9 @@ public class LocationService implements ILocationService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_LOCATIONS, key = "#id")
     public LocationResponseDTO getLocationById(Integer id) {
-        log.info("Getting location by ID: {}", id);
+        log.debug("📥 Cache MISS - Fetching location by ID: {}", id);
         Location location = locationRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Không tìm thấy địa điểm với ID: " + id));
 
@@ -62,6 +71,7 @@ public class LocationService implements ILocationService {
 
     @Override
     @Transactional
+    @CacheEvict(value = { CacheConfig.CACHE_LOCATIONS_ALL, CacheConfig.CACHE_PROVINCES }, allEntries = true)
     public LocationResponseDTO createLocation(CreateLocationRequestDTO request) {
         log.info("Creating new location: {}", request.getLocationName());
 
@@ -74,6 +84,11 @@ public class LocationService implements ILocationService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_LOCATIONS, key = "#request.locationId"),
+            @CacheEvict(value = CacheConfig.CACHE_LOCATIONS_ALL, allEntries = true),
+            @CacheEvict(value = CacheConfig.CACHE_PROVINCES, allEntries = true)
+    })
     public LocationResponseDTO updateLocation(UpdateLocationRequestDTO request) {
         log.info("Updating location with ID: {}", request.getLocationId());
 
@@ -105,6 +120,11 @@ public class LocationService implements ILocationService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.CACHE_LOCATIONS, key = "#id"),
+            @CacheEvict(value = CacheConfig.CACHE_LOCATIONS_ALL, allEntries = true),
+            @CacheEvict(value = CacheConfig.CACHE_PROVINCES, allEntries = true)
+    })
     public void deleteLocation(Integer id) {
         log.info("Deleting location with ID: {}", id);
 
@@ -116,8 +136,9 @@ public class LocationService implements ILocationService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_PROVINCES)
     public List<String> getDistinctProvinces() {
-        log.info("Getting distinct provinces");
+        log.debug("📥 Cache MISS - Fetching distinct provinces from database");
         return locationRepository.findDistinctProvinces();
     }
 }

@@ -1,14 +1,14 @@
 package com.example.Fuba_BE.dto.Booking;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Response DTO for a confirmed booking.
@@ -97,6 +97,9 @@ public class BookingResponse {
 
         @Schema(description = "Vehicle license plate", example = "30A-12345")
         private String vehiclePlate;
+
+        @Schema(description = "Vehicle type name", example = "Limousine")
+        private String vehicleTypeName;
 
         @Schema(description = "Driver name", example = "Trần Văn B")
         private String driverName;

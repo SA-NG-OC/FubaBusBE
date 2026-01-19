@@ -56,16 +56,23 @@ public class TripController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer originId,
             @RequestParam(required = false) Integer destId,
+            @RequestParam(required = false) Integer routeId,
             @RequestParam(required = false) Double minPrice,
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) List<String> timeRanges,
             @RequestParam(required = false) List<String> vehicleTypes,
-            @RequestParam(required = false) Integer minAvailableSeats) {
+            @RequestParam(required = false) Integer minAvailableSeats,
+            @RequestParam(required = false) List<String> statuses) {
+
+        // Default to Waiting and Running if no status specified
+        List<String> statusList = (statuses == null || statuses.isEmpty())
+                ? List.of("Waiting", "Running")
+                : statuses;
+
         Page<TripDetailedResponseDTO> tripPage = tripService.getAllTrips(
-                page, size, sortBy, sortDir, search, originId, destId, minPrice, maxPrice, date,
-                timeRanges, vehicleTypes, minAvailableSeats // <-- Truyền thêm vào Service
-        );
+                page, size, sortBy, sortDir, search, originId, destId, routeId, minPrice, maxPrice, date,
+                timeRanges, vehicleTypes, minAvailableSeats, statusList);
 
         return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", tripPage));
     }
@@ -143,7 +150,16 @@ public class TripController {
         // Priority 3: Use startDate/endDate as provided (can be null)
 
         Page<Trip> tripPage = tripService.getTripsForDriver(driverId, status, startDate, endDate, pageable);
-        Page<TripDetailedResponseDTO> responsePage = tripPage.map(tripMapper::toDetailedDTO);
+        Page<TripDetailedResponseDTO> responsePage = tripPage.map(trip -> {
+            TripDetailedResponseDTO dto = tripMapper.toDetailedDTO(trip);
+            // Enrich with booking stats
+            tripService.enrichTripStats(dto, trip.getTripId());
+            // Set total seats
+            if (trip.getVehicle() != null && trip.getVehicle().getVehicleType() != null) {
+                dto.setTotalSeats(trip.getVehicle().getVehicleType().getTotalSeats());
+            }
+            return dto;
+        });
         return ResponseEntity.ok(ApiResponse.success("Driver trips retrieved successfully", responsePage));
     }
 
