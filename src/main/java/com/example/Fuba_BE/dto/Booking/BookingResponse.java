@@ -56,6 +56,12 @@ public class BookingResponse {
     @Schema(description = "Booking created timestamp")
     private LocalDateTime createdAt;
 
+    @Schema(description = "Hold expiry timestamp - when the booking will expire if not paid")
+    private LocalDateTime holdExpiry;
+
+    @Schema(description = "Remaining seconds until booking expires", example = "720")
+    private Long remainingSeconds;
+
     /**
      * Nested DTO for trip information
      */
