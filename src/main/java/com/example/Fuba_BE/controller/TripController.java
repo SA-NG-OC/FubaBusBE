@@ -56,6 +56,7 @@ public class TripController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer originId,
             @RequestParam(required = false) Integer destId,
+            @RequestParam(required = false) Integer routeId,
             @RequestParam(required = false) Double minPrice,
             @RequestParam(required = false) Double maxPrice,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -70,7 +71,7 @@ public class TripController {
                 : statuses;
 
         Page<TripDetailedResponseDTO> tripPage = tripService.getAllTrips(
-                page, size, sortBy, sortDir, search, originId, destId, minPrice, maxPrice, date,
+                page, size, sortBy, sortDir, search, originId, destId, routeId, minPrice, maxPrice, date,
                 timeRanges, vehicleTypes, minAvailableSeats, statusList);
 
         return ResponseEntity.ok(ApiResponse.success("Trips retrieved successfully", tripPage));

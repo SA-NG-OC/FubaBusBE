@@ -59,13 +59,13 @@ public class DashboardController {
             @RequestParam(defaultValue = "10") int size
     ) {
         // Xử lý giá trị mặc định cho ngày
-        LocalDate targetDate = (date == null) ? LocalDate.now() : date;
+        //LocalDate targetDate = (date == null) ? LocalDate.now() : date;
 
         // Tạo Pageable
         Pageable pageable = PageRequest.of(page, size, Sort.by("departureTime").ascending());
 
         // Gọi service với routeId (có thể là null nếu không truyền)
-        Page<DashboardTripDTO> trips = dashboardService.getTodayTrips(targetDate, routeId, pageable);
+        Page<DashboardTripDTO> trips = dashboardService.getTodayTrips(date, routeId, pageable);
 
         return ResponseEntity.ok(ApiResponse.success("Trips list retrieved successfully", trips));
     }

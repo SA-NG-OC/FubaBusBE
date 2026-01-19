@@ -38,7 +38,7 @@ public interface ITripService {
         Trip updateTrip(Integer tripId, TripUpdateRequestDTO request);
 
         Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-                        String search, Integer originId, Integer destId,
+                        String search, Integer originId, Integer destId, Integer routeId,
                         Double minPrice, Double maxPrice, LocalDate date,
                         List<String> timeRanges, List<String> vehicleTypes,
                         Integer minAvailableSeats, List<String> statuses);
