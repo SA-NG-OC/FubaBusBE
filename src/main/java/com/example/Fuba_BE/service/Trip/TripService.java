@@ -337,7 +337,7 @@ public class TripService implements ITripService {
             }
         }
 
-        Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() : 5.0;
+        Double durationHours = route.getEstimatedDuration() != null ? route.getEstimatedDuration() / 60 : 5.0;
         LocalDateTime arrivalTime = departureTime.plusMinutes((long) (durationHours * 60));
 
         // Log kiểm tra conflict
