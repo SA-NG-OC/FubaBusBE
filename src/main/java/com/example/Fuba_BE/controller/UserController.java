@@ -89,9 +89,15 @@ public class UserController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<UserResponseDTO>>> getAllUsers(
+            @RequestParam(required = false) Integer roleId, // [NEW] Nhận roleId
+            @RequestParam(required = false) String keyword, // [NEW] Nhận từ khóa tìm kiếm
             @PageableDefault(page = 0, size = 20, sort = "userId", direction = Sort.Direction.DESC) Pageable pageable) {
-        log.debug("📥 Request to get all users");
-        Page<UserResponseDTO> users = userService.getAllUsers(pageable);
+
+        log.debug("📥 Request to get users - roleId: {}, keyword: {}", roleId, keyword);
+
+        // Gọi service với các tham số filter
+        Page<UserResponseDTO> users = userService.getAllUsers(roleId, keyword, pageable);
+
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 

@@ -526,4 +526,21 @@ public class UserService implements IUserService {
         log.info("✅ Found {} customers", customers.getTotalElements());
         return customers.map(userMapper::toResponseDTO);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponseDTO> getAllUsers(Integer roleId, String keyword, Pageable pageable) {
+        log.debug("🔍 Fetching users with roleId: {}, keyword: {}", roleId, keyword);
+
+        // Gọi hàm searchUsers thay vì findAll
+        Page<User> users = userRepository.searchUsers(roleId, keyword, pageable);
+
+        return users.map(user -> {
+            UserResponseDTO dto = userMapper.toResponseDTO(user);
+            if (dto.getAvatarUrl() == null || dto.getAvatarUrl().isEmpty()) {
+                dto.setAvatarUrl(cloudinaryService.getDefaultAvatarUrl());
+            }
+            return dto;
+        });
+    }
 }
