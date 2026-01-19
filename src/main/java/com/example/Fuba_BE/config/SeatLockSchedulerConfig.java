@@ -62,47 +62,61 @@ public class SeatLockSchedulerConfig {
      * (system timeout), while user-initiated cancellations will be marked as 'Cancelled'.
      * Seats will be released back to Available status.
      */
-    @Scheduled(fixedRate = 60000) // Every 60 seconds
-    @Transactional
-    public void expireHeldBookings() {
-        try {
-            logger.debug("Running scheduled task to expire held bookings");
-            LocalDateTime now = LocalDateTime.now();
-            
-            // Find expired bookings before updating them (using hold_expiry field)
-            List<Booking> expiredBookings = bookingRepository.findExpiredBookings(now);
-            
-            if (!expiredBookings.isEmpty()) {
-                logger.info("Found {} bookings with hold_expiry < now ({})", 
+@Scheduled(fixedRate = 60000) // Every 60 seconds
+@Transactional
+public void expireHeldBookings() {
+    try {
+        logger.debug("Running scheduled task to expire held bookings");
+        LocalDateTime now = LocalDateTime.now();
+
+        // Find expired bookings before updating them (using hold_expiry field)
+        List<Booking> expiredBookings = bookingRepository.findExpiredBookings(now);
+
+        if (!expiredBookings.isEmpty()) {
+            logger.info("Found {} bookings with hold_expiry < now ({})",
                     expiredBookings.size(), now);
-                
-                // Release seats for each expired booking
-                int totalSeatsReleased = 0;
-                for (Booking booking : expiredBookings) {
-                    List<Ticket> tickets = ticketRepository.findByBookingId(booking.getBookingId());
-                    
-                    for (Ticket ticket : tickets) {
-                        TripSeat seat = ticket.getSeat();
-                        if (seat != null && ("Held".equals(seat.getStatus()))) {
-                            seat.release();
-                            tripSeatRepository.save(seat);
-                            totalSeatsReleased++;
-                            logger.debug("Released seat {} for expired booking {}", 
+
+            int totalSeatsReleased = 0;
+
+            for (Booking booking : expiredBookings) {
+
+                // ✅ FIX 1: Không expire booking đã Paid
+                if ("Paid".equals(booking.getBookingStatus())) {
+                    logger.warn("Skip expiring Paid booking {}", booking.getBookingCode());
+                    continue;
+                }
+
+                // ✅ FIX 2: Mark booking Expired MỘT LẦN, ngoài loop ticket
+                booking.setBookingStatus("Expired");
+                bookingRepository.save(booking);
+
+                // Release seats for this expired booking
+                List<Ticket> tickets =
+                        ticketRepository.findByBookingId(booking.getBookingId());
+
+                for (Ticket ticket : tickets) {
+                    TripSeat seat = ticket.getSeat();
+
+                    // ✅ FIX 3: Chỉ release ghế CHƯA Booked
+                    if (seat != null ) {
+                        seat.release();
+                        tripSeatRepository.save(seat);
+                        totalSeatsReleased++;
+
+                        logger.debug("Released seat {} for expired booking {}",
                                 seat.getSeatNumber(), booking.getBookingCode());
-                        }
                     }
                 }
-                
-                // Update booking status to Expired (system timeout)
-                int expiredCount = bookingRepository.updateExpiredBookingsStatus(now);
-                
-                logger.info("Marked {} bookings as Expired and released {} seats", 
-                    expiredCount, totalSeatsReleased);
             }
-        } catch (Exception e) {
-            logger.error("Error in scheduled task to expire bookings: {}", e.getMessage(), e);
+
+            logger.info("Expired {} bookings and released {} seats",
+                    expiredBookings.size(), totalSeatsReleased);
         }
+    } catch (Exception e) {
+        logger.error("Error in scheduled task to expire bookings: {}", e.getMessage(), e);
     }
+}
+
     
     /**
      * Alternative: More frequent check (every 10 seconds) for higher responsiveness.

@@ -91,11 +91,17 @@ public class DashboardService implements IDashboardService {
     @Override
     @Transactional(readOnly = true)
     public Page<DashboardTripDTO> getTodayTrips(LocalDate date, Integer routeId, Pageable pageable) { // Thêm routeId vào tham số
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
+        LocalDateTime start = null;
+        LocalDateTime end = null;
 
-        // Truyền routeId xuống repository
-        Page<Object[]> page = tripRepository.findTripsWithBookingCount(startOfDay, endOfDay, routeId, pageable);
+        // Chỉ tính toán thời gian nếu date được truyền vào
+        if (date != null) {
+            start = date.atStartOfDay();
+            end = date.atTime(LocalTime.MAX);
+        }
+
+        // Truyền xuống repo (start và end có thể là null)
+        Page<Object[]> page = tripRepository.findTripsWithBookingCount(start, end, routeId, pageable);
 
         return page.map(row -> {
             Trip trip = (Trip) row[0];

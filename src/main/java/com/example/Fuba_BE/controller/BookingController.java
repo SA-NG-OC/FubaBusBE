@@ -138,10 +138,17 @@ public class BookingController {
     public ResponseEntity<ApiResponse<BookingResponse>> getBookingByCode(
             @PathVariable String bookingCode) {
 
+        // Extract actual booking code if it contains timestamp (format: BK20260119023-1768805286103)
+        String actualBookingCode = bookingCode.contains("-") 
+            ? bookingCode.substring(0, bookingCode.lastIndexOf("-")) 
+            : bookingCode;
+        
+        log.debug("Looking for booking with code: {} (from path param: {})", actualBookingCode, bookingCode);
+
         return ResponseEntity.ok(ApiResponse.<BookingResponse>builder()
                 .success(true)
                 .message("Lấy thông tin booking thành công")
-                .data(bookingService.getBookingByCode(bookingCode))
+                .data(bookingService.getBookingByCode(actualBookingCode))
                 .build());
     }
 

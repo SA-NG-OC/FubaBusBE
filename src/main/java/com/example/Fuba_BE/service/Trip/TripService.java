@@ -1,6 +1,6 @@
 package com.example.Fuba_BE.service.Trip;
 
-import java.math.BigDecimal; // [NEW] Cần import để ép kiểu so sánh giá
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -77,7 +77,7 @@ public class TripService implements ITripService {
     @Override
     @Transactional(readOnly = true)
     public Page<TripDetailedResponseDTO> getAllTrips(int page, int size, String sortBy, String sortDir,
-            String search, Integer originId, Integer destId,
+            String search, Integer originId, Integer destId, Integer routeId,
             Double minPrice, Double maxPrice, LocalDate date,
             List<String> timeRanges, List<String> vehicleTypes,
             Integer minAvailableSeats, List<String> statuses) {
@@ -114,6 +114,10 @@ public class TripService implements ITripService {
             }
             if (destId != null) {
                 predicates.add(cb.equal(root.get("route").get("destination").get("locationId"), destId));
+            }
+
+            if (routeId != null) {
+                predicates.add(cb.equal(root.get("route").get("routeId"), routeId));
             }
 
             // 2.3 Price
