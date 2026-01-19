@@ -306,7 +306,7 @@ public class TripService implements ITripService {
         if (departureTime.isBefore(LocalDateTime.now()))
             throw new BadRequestException("Thời gian khởi hành không được ở trong quá khứ!");
 
-        Route route = routeRepository.findById(request.getRouteId())
+        Route route = routeRepository.findByIdWithLocations(request.getRouteId())
                 .orElseThrow(() -> new ResourceNotFoundException("Route not found"));
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
