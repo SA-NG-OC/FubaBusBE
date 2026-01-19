@@ -989,11 +989,6 @@ public class BookingService implements IBookingService {
 
     private void createPassenger(Ticket ticket, BookingConfirmRequest.PassengerInfo info) {
         Optional<Passenger> existingPassenger = passengerRepository.findByTicket_TicketId(ticket.getTicketId());
-        if (existingPassenger.isPresent()) {
-            log.warn("Passenger already exists for ticket {}, skipping creation", ticket.getTicketId());
-            return;
-        }
-
         RouteStop pickupStop = null;
         RouteStop dropoffStop = null;
 
@@ -1002,6 +997,21 @@ public class BookingService implements IBookingService {
         }
         if (info.getDropoffStopId() != null) {
             dropoffStop = routeStopRepository.findById(info.getDropoffStopId()).orElse(null);
+        }
+
+        if (existingPassenger.isPresent()) {
+            Passenger passenger = existingPassenger.get();
+            if (info.getPickupStopId() != null) {
+                passenger.setPickupLocation(pickupStop);
+            }
+            if (info.getDropoffStopId() != null) {
+                passenger.setDropoffLocation(dropoffStop);
+            }
+            passenger.setPickupAddress(info.getPickupAddress());
+            passenger.setDropoffAddress(info.getDropoffAddress());
+            passenger.setSpecialNote(info.getSpecialNote());
+            passengerRepository.save(passenger);
+            return;
         }
 
         Passenger passenger = Passenger.builder()

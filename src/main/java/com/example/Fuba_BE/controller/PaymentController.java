@@ -238,7 +238,7 @@ public class PaymentController {
                                 manualIpn.setTransId(transId != null ? transId : 0L);
                                 manualIpn.setAmount(momoStatus.getAmount());
                                 manualIpn.setSkipSignatureCheck(true); // Skip signature check for manual IPN
-                                manualIpn.setOrderInfo(momoStatus.getOrderInfo() != null ? momoStatus.getOrderInfo() : "");
+                                // manualIpn.setOrderInfo(momoStatus.getOrderInfo() != null ? momoStatus.getOrderInfo() : "");
                                 manualIpn.setPartnerCode(momoStatus.getPartnerCode() != null ? momoStatus.getPartnerCode() : "");
                                 manualIpn.setResponseTime(System.currentTimeMillis());
 
