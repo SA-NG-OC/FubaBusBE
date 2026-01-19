@@ -27,7 +27,7 @@ import java.time.Year;
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "APIs for dashboard statistics, charts, and monitoring")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'MANAGER')")
 public class DashboardController {
 
     private final IDashboardService dashboardService;
