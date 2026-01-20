@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "APIs for dashboard statistics, charts, and monitoring")
-@PreAuthorize("hasAnyAnyRole('ADMIN', 'MANAGER', 'STAFF', 'MANAGER')")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
 public class DashboardController {
 
     private final IDashboardService dashboardService;
