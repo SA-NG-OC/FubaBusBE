@@ -481,7 +481,9 @@ public class TripService implements ITripService {
     @Override
     @Transactional
     public void deleteTrip(Integer tripId) {
-        Trip trip = tripRepository.findById(tripId)
+        // Load trip with details to avoid LazyInitializationException when mappings
+        // access related lazy associations (driver.user, vehicle.vehicleType, etc.)
+        Trip trip = tripRepository.findByIdWithDetails(tripId)
                 .orElseThrow(() -> new ResourceNotFoundException("Trip not found"));
 
         if ("Running".equalsIgnoreCase(trip.getStatus()) || "Completed".equalsIgnoreCase(trip.getStatus())) {
@@ -572,9 +574,9 @@ public class TripService implements ITripService {
             throw new BadRequestException("Only trips with status 'Waiting' or 'Delayed' can be edited.");
         }
 
-        Vehicle newVehicle = vehicleRepository.findById(request.getVehicleId())
+        Vehicle newVehicle = vehicleRepository.findByIdWithVehicleType(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
-        Driver newDriver = driverRepository.findById(request.getDriverId())
+        Driver newDriver = driverRepository.findByIdWithUser(request.getDriverId())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
         // Validate vehicle status
@@ -596,7 +598,7 @@ public class TripService implements ITripService {
             if (request.getDriverId().equals(request.getSubDriverId())) {
                 throw new BadRequestException("Main driver and sub-driver cannot be the same person.");
             }
-            subDriver = driverRepository.findById(request.getSubDriverId())
+            subDriver = driverRepository.findByIdWithUser(request.getSubDriverId())
                     .orElseThrow(() -> new ResourceNotFoundException("Sub-driver not found"));
         }
 
@@ -637,7 +639,12 @@ public class TripService implements ITripService {
         trip.setSubDriver(subDriver);
         trip.setBasePrice(request.getPrice());
 
-        return tripRepository.save(trip);
+        Trip saved = tripRepository.save(trip);
+
+        // Re-fetch with details to ensure related lazy associations (route, origin,
+        // destination, driver.user, vehicle.vehicleType, etc.) are initialized
+        // before the entity is detached and returned to the controller.
+        return tripRepository.findByIdWithDetails(saved.getTripId()).orElse(saved);
     }
 
     @Override
