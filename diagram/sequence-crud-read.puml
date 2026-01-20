@@ -1,0 +1,23 @@
+@startuml
+title CRUD - Read
+actor Client
+participant Controller
+participant Service
+participant Repository
+
+Client -> Controller : GET /resources/{id}
+Controller -> Service : getById(id)
+Service -> Repository : findById(id)
+Repository --> Service : entity (or empty)
+alt found
+  Service --> Controller : ResourceResponse
+  Controller --> Client : 200 OK
+else not found
+  Controller --> Client : 404 Not Found
+end
+
+note right of Service
+- Check permissions if needed
+- Map entity -> DTO
+end note
+@enduml

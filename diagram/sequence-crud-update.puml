@@ -1,0 +1,26 @@
+@startuml
+title CRUD - Update
+actor Client
+participant Controller
+participant Service
+participant Repository
+
+Client -> Controller : PUT /resources/{id}\nUpdateResourceRequest
+Controller -> Service : update(id, request)
+Service -> Repository : findById(id)
+Repository --> Service : existingEntity
+alt exists
+  Service -> Repository : save(updatedEntity)
+  Repository --> Service : updatedEntity
+  Service --> Controller : ResourceResponse
+  Controller --> Client : 200 OK
+else not exists
+  Controller --> Client : 404 Not Found
+end
+
+note right of Service
+- Validate changes
+- Enforce business constraints
+- Transactional
+end note
+@enduml

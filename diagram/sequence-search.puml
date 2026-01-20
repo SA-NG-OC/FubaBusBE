@@ -1,0 +1,20 @@
+@startuml
+title Search - Trip Search
+actor Client
+participant Controller
+participant Service
+participant Repository
+
+Client -> Controller : GET /trips?origin=Hanoi&date=2026-01-21
+Controller -> Service : searchTrips(params, page,size)
+Service -> Repository : queryTrips(origin, date, pageable)
+Repository --> Service : Page<Trip>
+Service --> Controller : Page<TripResponse>
+Controller --> Client : 200 OK + results
+
+note right of Service
+- Apply filters
+- Pagination (default size = 20)
+- Compute availableSeats if needed
+end note
+@enduml

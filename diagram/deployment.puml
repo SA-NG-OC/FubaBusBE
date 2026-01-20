@@ -1,0 +1,50 @@
+@startuml
+skinparam nodeStyle rectangle
+skinparam shadowing false
+hide circle
+
+legend left
+|= Node |= Role |
+| Browser |= Client Node (Web) |
+| Mobile Device |= Client Node (Mobile) |
+| Reverse Proxy/CDN |= TLS termination, caching, WS upgrade |
+| Application Server |= Spring Boot API + WebSocket |
+| Database Server |= PostgreSQL |
+| External Services |= Cloudinary / Payment / SMTP |
+endlegend
+
+node "Browser\n(Client Node)" as Browser
+node "Mobile Device" as Device
+node "Reverse Proxy / CDN" as Proxy
+node "Application Server\n(Spring Boot)" as App
+database "Database Server\n(PostgreSQL)" as Db
+cloud "Cloudinary" as Cloud
+cloud "Payment Gateway" as Pay
+cloud "SMTP Email" as Mail
+
+Browser --> Proxy : HTTPS
+Device --> Proxy : HTTPS
+Proxy --> App : HTTP/HTTPS\nWebSocket upgrade
+App --> Db : JDBC
+
+App --> Cloud : Upload PDF / Get URL
+App --> Pay : Create payment
+Pay --> App : Webhook callback
+App --> Mail : Send emails
+
+note right of Proxy
+- TLS termination
+- CORS
+- WebSocket upgrade
+- Path routing (/ws, /trips,...)
+end note
+
+note right of App
+- REST API: /trips, /bookings, /auth
+- WebSocket: /ws (STOMP)
+- Security: JWT
+- Mappers: MapStruct
+- Migrations: Flyway
+end note
+
+@enduml

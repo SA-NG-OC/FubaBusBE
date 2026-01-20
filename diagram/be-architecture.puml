@@ -1,0 +1,54 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+hide circle
+
+top to bottom direction
+
+title Backend Architecture - FubaBusBE
+'' Simplified vertical layout: Controller => Service => Repository
+component "Controllers (REST)" as Controllers
+component "Services (Business Logic)" as Services
+component "Repositories (JPA)" as Repos
+component "Mappers (MapStruct)" as Mappers
+component "WebSocket (STOMP/SockJS)\nSimpMessagingTemplate" as WS
+database "PostgreSQL" as DB
+cloud "Cloudinary (File Storage)" as Cloud
+cloud "Payment Gateway" as Pay
+cloud "SMTP Email" as Mail
+
+Controllers --> Services : call service methods (validate, map DTO)
+Services --> Repos : transactional DB access (JpaRepository)
+Services --> Mappers : map Entities <-> DTOs
+Services ..> WS : publish events (seat locks, notifications)
+Services --> Cloud : upload/get ticket PDFs, avatars
+Services --> Pay : create payment / verify callback
+Services --> Mail : send ticket emails
+Repos --> DB : JDBC
+
+note top of Controllers
+- AuthController
+- TripsController
+- BookingsController
+- SeatsController
+- TicketsController
+end note
+
+note left of Services
+- UserService
+- TripService
+- BookingService
+- SeatService
+- PaymentService
+- NotificationService
+end note
+
+note right of Repos
+- TripRepository
+- TripSeatRepository
+- BookingRepository
+- PaymentRepository
+- TicketRepository
+- UserRepository
+end note
+@enduml

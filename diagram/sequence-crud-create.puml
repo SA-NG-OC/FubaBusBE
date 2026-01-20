@@ -1,0 +1,20 @@
+@startuml
+title CRUD - Create
+actor Client
+participant Controller
+participant Service
+participant Repository
+
+Client -> Controller : POST /resources\nCreateResourceRequest
+Controller -> Service : create(request)
+Service -> Repository : save(entity)
+Repository --> Service : savedEntity
+Service --> Controller : ResourceResponse
+Controller --> Client : 201 Created + Location
+
+note right of Service
+- Validate input
+- Apply business rules
+- Start transaction
+end note
+@enduml

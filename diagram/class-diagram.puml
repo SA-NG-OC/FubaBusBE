@@ -1,0 +1,81 @@
+@startuml
+@startuml
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+title Domain Class Diagram - Booking System (Simplified)
+
+' Only main domain classes included for OOAD-level diagram
+class User {
+  - id : Integer
+  - fullName : String
+  - email : String
+  - phone : String
+  - status : String
+}
+
+class Route {
+  - id : Integer
+  - origin : String
+  - destination : String
+  - distanceKm : Decimal
+}
+
+class Vehicle {
+  - id : Integer
+  - plateNumber : String
+  - model : String
+  - capacity : Integer
+}
+
+class Trip {
+  - id : Integer
+  - departureAt : DateTime
+  - arrivalAt : DateTime
+  - seatPrice : Decimal
+  - status : String
+}
+
+class Booking {
+  - id : Integer
+  - createdAt : DateTime
+  - totalAmount : Decimal
+  - status : String
+}
+
+class Ticket {
+  - id : Integer
+  - ticketNumber : String
+  - issuedAt : DateTime
+  - pdfUrl : String
+  - status : String
+}
+
+class Payment {
+  - id : Integer
+  - amount : Decimal
+  - method : String
+  - providerRef : String
+  - status : String
+}
+
+' Relationships
+User "1" -- "0..*" Booking : places
+Booking "1" -- "1..*" Ticket : issues
+Booking "1" -- "0..*" Payment : records
+Trip "1" -- "0..*" Booking : contains
+Vehicle "1" -- "0..*" Trip : serves
+Route "1" -- "0..*" Trip : defines
+Ticket "*" -- "1" Booking : for
+
+note right of Booking
+  - Booking represents a user's reservation for one or more seats on a Trip.
+end note
+
+note left of Trip
+  - Trip associates a Route and a Vehicle with scheduled times.
+end note
+
+@enduml

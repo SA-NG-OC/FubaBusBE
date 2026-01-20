@@ -1,0 +1,40 @@
+@startuml
+skinparam shadowing false
+hide footbox
+autonumber
+
+actor Client
+participant "BookingsController" as BC
+participant "BookingService" as BS
+participant "SeatService" as SS
+participant "BookingRepository" as BR
+participant "SimpMessagingTemplate" as SMT
+
+Client -> BC : POST /bookings\nCreateBookingRequest (JWT)
+BC -> BS : createBooking(req, userId)
+BS -> SS : lockSeats(tripId, seatIds, userId)
+SS -> BS : lockedSeats
+BS -> BR : save(Booking + BookingSeat)
+BR --> BS : savedBooking
+BS -> SMT : publish("/topic/seats/" + tripId, lockedSeats)
+BS --> BC : BookingResponse
+BC --> Client : 201 Created
+
+== Payment (simplified) ==
+participant "PaymentService" as PS
+participant "PaymentGateway" as PG
+participant "TicketService" as TS
+participant "CloudStorage" as CL
+
+Client -> BC : POST /bookings/{id}/pay\nPaymentRequest
+BC -> PS : initiatePayment(bookingId, req)
+PS -> PG : createPayment(session)
+PG --> Client : redirect/checkout URL
+PG -> PS : POST /webhook/payment\ncallback
+PS -> BS : confirmPayment(bookingId, callback)
+BS -> TS : issueTicket(booking)
+TS -> CL : uploadPdf(ticketPdf)
+TS --> BS : ticketRecord
+BS -> SMT : publish("/topic/notifications/" + userId, ticketInfo)
+PS --> BC : 200 OK
+@enduml

@@ -28,6 +28,7 @@ import com.example.Fuba_BE.exception.BadRequestException;
 import com.example.Fuba_BE.exception.ResourceNotFoundException;
 import com.example.Fuba_BE.mapper.TicketMapper;
 import com.example.Fuba_BE.repository.PassengerRepository;
+import com.example.Fuba_BE.repository.UserRepository;
 import com.example.Fuba_BE.repository.TicketRepository;
 import com.example.Fuba_BE.repository.TripRepository;
 import com.example.Fuba_BE.repository.TripSeatRepository;
@@ -45,6 +46,7 @@ public class TicketService implements ITicketService {
     private final TicketMapper ticketMapper;
     private final TripSeatRepository tripSeatRepository;
     private final TripRepository tripRepository;
+    private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Override
@@ -234,6 +236,29 @@ public class TicketService implements ITicketService {
             if (seat != null) {
                 seat.setStatus("Used");
                 tripSeatRepository.save(seat);
+
+                // Update passenger check-in info (mark as boarded)
+                Passenger passenger = passengerRepository.findByTicket_TicketId(ticket.getTicketId()).orElse(null);
+                if (passenger != null) {
+                    passenger.setCheckinStatus("Boarded");
+                    passenger.setCheckinTime(java.time.LocalDateTime.now());
+                    // Resolve current user from security context to set checkedInBy
+                    try {
+                        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                                .getAuthentication();
+                        if (auth != null && auth.getPrincipal() instanceof com.example.Fuba_BE.security.UserPrincipal) {
+                            Integer currentUserId = ((com.example.Fuba_BE.security.UserPrincipal) auth.getPrincipal())
+                                    .getUserId();
+                            // Load full User entity and set as checkedInBy
+                            Optional<com.example.Fuba_BE.domain.entity.User> currentUser = userRepository
+                                    .findById(currentUserId);
+                            currentUser.ifPresent(passenger::setCheckedInBy);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not resolve current user for check-in: {}", e.getMessage());
+                    }
+                    passengerRepository.save(passenger);
+                }
 
                 // Broadcast seat update to WebSocket topic so frontends can refresh
                 try {

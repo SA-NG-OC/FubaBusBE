@@ -1,0 +1,25 @@
+@startuml
+title CRUD - Delete
+actor Client
+participant Controller
+participant Service
+participant Repository
+
+Client -> Controller : DELETE /resources/{id}
+Controller -> Service : delete(id)
+Service -> Repository : findById(id)
+Repository --> Service : entity
+alt exists
+  Service -> Repository : delete(entity)
+  Repository --> Service : (void)
+  Service --> Controller : 204 No Content
+  Controller --> Client : 204 No Content
+else not exists
+  Controller --> Client : 404 Not Found
+end
+
+note right of Service
+- Check authorization
+- Soft-delete vs hard-delete decision
+end note
+@enduml

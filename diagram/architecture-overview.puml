@@ -1,0 +1,49 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+hide circle
+
+legend left
+|= Component |= Description |
+| Frontend |= FutaBusFE (Next.js 16 + React 19) |
+| Mobile |= fuba-mobile (Expo React Native) |
+| Backend |= FubaBusBE (Spring Boot 4 + Java 21) |
+| Database |= PostgreSQL (Flyway migrations) |
+| Cloudinary |= File storage (ticket PDFs, avatars) |
+| Payment Gateway |= MoMo (example) |
+| SMTP |= Email service |
+| OSM Tiles |= OpenStreetMap tiles for maps |
+endlegend
+
+component "Frontend\n(FutaBusFE)" as FE
+component "Mobile\n(fuba-mobile)" as Mobile
+component "Backend\n(FubaBusBE)" as BE
+database "PostgreSQL" as DB
+cloud "Cloudinary" as Cloud
+cloud "Payment Gateway (MoMo)" as Pay
+cloud "SMTP Email" as SMTP
+cloud "OpenStreetMap Tiles" as OSM
+
+FE --> BE : HTTPS REST (JSON)\nAxios
+FE ..> BE : WebSocket STOMP (/ws)
+Mobile --> BE : HTTPS REST (JSON)
+Mobile ..> BE : WebSocket STOMP (/ws)
+
+BE --> DB : JDBC\nFlyway migrations
+BE --> Cloud : Upload PDF / Get URL
+BE --> Pay : Create payment\nVerify callback
+Pay --> BE : Webhook callbacks
+BE --> SMTP : Send ticket emails
+
+FE ..> OSM : Tiles via react-leaflet
+
+note right of BE
+- Controllers: REST endpoints (/trips,/bookings,...)
+- Services: transactional business logic
+- Repositories: JpaRepository + JOIN FETCH
+- Mappers: MapStruct
+- Security: JWT
+- WebSocket: STOMP/SockJS at /ws
+end note
+
+@enduml
