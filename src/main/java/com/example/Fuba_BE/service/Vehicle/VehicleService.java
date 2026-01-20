@@ -1,5 +1,12 @@
 package com.example.Fuba_BE.service.Vehicle;
 
+import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.Fuba_BE.domain.entity.Vehicle;
 import com.example.Fuba_BE.domain.entity.VehicleType;
 import com.example.Fuba_BE.dto.Vehicle.VehicleRequestDTO;
@@ -11,13 +18,8 @@ import com.example.Fuba_BE.mapper.SelectionMapper;
 import com.example.Fuba_BE.mapper.VehicleMapper;
 import com.example.Fuba_BE.repository.VehicleRepository;
 import com.example.Fuba_BE.repository.VehicleTypeRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -122,11 +124,25 @@ public class VehicleService implements IVehicleService {
 
     @Override
     @Transactional(readOnly = true)
-    public VehicleStatsDTO getVehicleStats() {
-        long total = vehicleRepository.count();
-        long operational = vehicleRepository.countByStatusIgnoreCase("Operational");
-        long maintenance = vehicleRepository.countByStatusIgnoreCase("Maintenance");
-        long inactive = vehicleRepository.countByStatusIgnoreCase("Inactive");
+    public VehicleStatsDTO getVehicleStats(Integer routeId) {
+        long total;
+        long operational;
+        long maintenance;
+        long inactive;
+
+        if (routeId != null) {
+            // Filter by route
+            total = vehicleRepository.countByRouteId(routeId);
+            operational = vehicleRepository.countByRouteIdAndStatus(routeId, "Operational");
+            maintenance = vehicleRepository.countByRouteIdAndStatus(routeId, "MAINTENANCE");
+            inactive = vehicleRepository.countByRouteIdAndStatus(routeId, "INACTIVE");
+        } else {
+            // All vehicles
+            total = vehicleRepository.count();
+            operational = vehicleRepository.countByStatusIgnoreCase("Operational");
+            maintenance = vehicleRepository.countByStatusIgnoreCase("MAINTENANCE");
+            inactive = vehicleRepository.countByStatusIgnoreCase("INACTIVE");
+        }
 
         return VehicleStatsDTO.builder()
                 .total(total)

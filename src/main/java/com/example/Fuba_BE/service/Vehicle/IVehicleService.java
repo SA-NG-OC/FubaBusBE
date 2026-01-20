@@ -23,5 +23,5 @@ public interface IVehicleService {
 
     void deleteVehicle(Integer id);
 
-    VehicleStatsDTO getVehicleStats();
+    VehicleStatsDTO getVehicleStats(Integer routeId);
 }

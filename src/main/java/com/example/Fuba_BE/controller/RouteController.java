@@ -66,7 +66,7 @@ public class RouteController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> createRoute(
             @Valid @RequestBody RouteRequestDTO request
     ) {
@@ -76,7 +76,7 @@ public class RouteController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<RouteResponseDTO>> updateRoute(
             @PathVariable Integer id,
             @Valid @RequestBody RouteRequestDTO request

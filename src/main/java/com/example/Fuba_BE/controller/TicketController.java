@@ -111,7 +111,7 @@ public class TicketController {
          * Admin and Staff can change tickets
          */
         @PutMapping("/{ticketId}/change")
-        @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
         public ResponseEntity<ApiResponse<TicketChangeResponseDTO>> changeTicket(
                         @PathVariable Integer ticketId,
                         @Valid @RequestBody TicketChangeRequestDTO request) {

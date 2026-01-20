@@ -77,28 +77,39 @@ public class SecurityConfig {
                 // Uncomment the policies below when ready to enforce
                 // authentication/authorization
 
-                // --- ADMIN ONLY ---
-                // .requestMatchers("/admin/**").hasRole("ADMIN")
-                // .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                // .requestMatchers("/users/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "STAFF")
+                // --- ADMIN & MANAGER ---
+                // .requestMatchers("/admin/**").hasAnyRole("ADMIN", "MANAGER")
+                // .requestMatchers("/manager/**").hasAnyRole("ADMIN", "MANAGER")
+                // .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MANAGER")
+                // .requestMatchers("/users/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                // .requestMatchers("/dashboard/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
 
                 // --- STAFF/EMPLOYEE ---
-                // .requestMatchers("/employees/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.POST, "/routes/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.PUT, "/routes/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.DELETE, "/routes/**").hasRole("ADMIN")
-                // .requestMatchers(HttpMethod.POST, "/trips/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.PUT, "/trips/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.DELETE, "/trips/**").hasRole("ADMIN")
-                // .requestMatchers(HttpMethod.POST, "/vehicles/**").hasAnyRole("ADMIN",
+                // .requestMatchers("/employees/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                // .requestMatchers(HttpMethod.POST, "/routes/**").hasAnyRole("ADMIN",
+                // "MANAGER", "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/routes/**").hasAnyRole("ADMIN", "MANAGER",
                 // "STAFF")
-                // .requestMatchers(HttpMethod.PUT, "/vehicles/**").hasAnyRole("ADMIN", "STAFF")
-                // .requestMatchers(HttpMethod.DELETE, "/vehicles/**").hasRole("ADMIN")
+                // .requestMatchers(HttpMethod.DELETE, "/routes/**").hasAnyRole("ADMIN",
+                // "MANAGER")
+                // .requestMatchers(HttpMethod.POST, "/trips/**").hasAnyRole("ADMIN", "MANAGER",
+                // "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/trips/**").hasAnyRole("ADMIN", "MANAGER",
+                // "STAFF")
+                // .requestMatchers(HttpMethod.DELETE, "/trips/**").hasAnyRole("ADMIN",
+                // "MANAGER")
+                // .requestMatchers(HttpMethod.POST, "/vehicles/**").hasAnyRole("ADMIN",
+                // "MANAGER",
+                // "STAFF")
+                // .requestMatchers(HttpMethod.PUT, "/vehicles/**").hasAnyRole("ADMIN",
+                // "MANAGER", "STAFF")
+                // .requestMatchers(HttpMethod.DELETE, "/vehicles/**").hasAnyRole("ADMIN",
+                // "MANAGER")
 
                 // --- DRIVER ---
                 // .requestMatchers("/drivers/me/**").hasRole("DRIVER")
-                // .requestMatchers("/drivers/{driverId}/trips").hasAnyRole("ADMIN", "STAFF",
+                // .requestMatchers("/drivers/{driverId}/trips").hasAnyRole("ADMIN", "MANAGER",
+                // "STAFF",
                 // "DRIVER")
 
                 // --- USER/CUSTOMER ---

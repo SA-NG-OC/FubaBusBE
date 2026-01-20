@@ -1,13 +1,7 @@
 package com.example.Fuba_BE.controller;
 
-import com.example.Fuba_BE.dto.Dashboard.DashboardChartDTO;
-import com.example.Fuba_BE.dto.Dashboard.DashboardStatsDTO;
-import com.example.Fuba_BE.dto.Dashboard.DashboardTripDTO;
-import com.example.Fuba_BE.payload.ApiResponse;
-import com.example.Fuba_BE.service.Dashboard.IDashboardService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import java.time.LocalDate;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,14 +14,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
-import java.time.Year;
+import com.example.Fuba_BE.dto.Dashboard.DashboardChartDTO;
+import com.example.Fuba_BE.dto.Dashboard.DashboardStatsDTO;
+import com.example.Fuba_BE.dto.Dashboard.DashboardTripDTO;
+import com.example.Fuba_BE.payload.ApiResponse;
+import com.example.Fuba_BE.service.Dashboard.IDashboardService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Dashboard", description = "APIs for dashboard statistics, charts, and monitoring")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
 public class DashboardController {
 
     private final IDashboardService dashboardService;
@@ -50,16 +51,14 @@ public class DashboardController {
 
     // 3. API Danh sách chuyến đi trong ngày (Table)
     @GetMapping("/todays-trips")
-    @Operation(summary = "Get trips for a specific date with optional route filter",
-            description = "Retrieve paginated list of trips. Can filter by Route ID.")
+    @Operation(summary = "Get trips for a specific date with optional route filter", description = "Retrieve paginated list of trips. Can filter by Route ID.")
     public ResponseEntity<ApiResponse<Page<DashboardTripDTO>>> getTodayTrips(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer routeId, // <--- Thêm tham số này (không bắt buộc)
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
+            @RequestParam(defaultValue = "10") int size) {
         // Xử lý giá trị mặc định cho ngày
-        //LocalDate targetDate = (date == null) ? LocalDate.now() : date;
+        // LocalDate targetDate = (date == null) ? LocalDate.now() : date;
 
         // Tạo Pageable
         Pageable pageable = PageRequest.of(page, size, Sort.by("departureTime").ascending());

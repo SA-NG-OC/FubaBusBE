@@ -6,7 +6,7 @@ package com.example.Fuba_BE.domain.enums;
  * 
  * Usage in @PreAuthorize:
  * - For single role: @PreAuthorize("hasRole('ADMIN')")
- * - For multiple roles: @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+ * - For multiple roles: @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
  * 
  * Note: Spring Security automatically adds "ROLE_" prefix
  * So hasRole('ADMIN') checks for authority "ROLE_ADMIN"

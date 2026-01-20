@@ -55,7 +55,7 @@ public class VehicleTypeController {
      * ADMIN and STAFF can view vehicle types
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<VehicleTypeResponseDTO>>> getAllVehicleTypes(
             @PageableDefault(page = 0, size = 20, sort = "typeName", direction = Sort.Direction.ASC) Pageable pageable) {
         log.debug("📥 Request to get all vehicle types with pagination");
@@ -68,7 +68,7 @@ public class VehicleTypeController {
      * ADMIN and STAFF can view vehicle type details
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<VehicleTypeResponseDTO>> getVehicleTypeById(@PathVariable Integer id) {
         log.info("📥 Request to get vehicle type by ID: {}", id);
         VehicleTypeResponseDTO vehicleType = vehicleTypeService.getVehicleTypeById(id);

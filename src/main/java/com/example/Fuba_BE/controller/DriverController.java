@@ -58,7 +58,7 @@ public class DriverController {
      * Get driver statistics
      */
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<DriverStatsDTO>> getDriverStats() {
         DriverStatsDTO stats = driverService.getDriverStats();
         return ResponseEntity.ok(ApiResponse.success("Driver statistics retrieved", stats));
@@ -69,7 +69,7 @@ public class DriverController {
      * ADMIN and STAFF can view drivers
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<DriverResponseDTO>>> getAllDrivers(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
@@ -85,7 +85,7 @@ public class DriverController {
      * ADMIN and STAFF can view driver details
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<DriverResponseDTO>> getDriverById(@PathVariable Integer id) {
         log.info("📥 Request to get driver by ID: {}", id);
         DriverResponseDTO driver = driverService.getDriverById(id);
@@ -97,7 +97,7 @@ public class DriverController {
      * Only ADMIN and STAFF can create drivers
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<DriverResponseDTO>> createDriver(
             @Valid @RequestBody DriverRequestDTO request) {
         log.info("📥 Request to create driver with license: {}", request.getDriverLicense());
@@ -112,7 +112,7 @@ public class DriverController {
      * Accepts multipart/form-data with optional avatar file
      */
     @PostMapping(value = "/with-account", consumes = "multipart/form-data")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<DriverResponseDTO>> createDriverWithAccount(
             @Valid @ModelAttribute CreateDriverWithAccountRequest request,
             @RequestPart(value = "avatar", required = false) MultipartFile avatarFile) {
@@ -128,7 +128,7 @@ public class DriverController {
      * Only ADMIN and STAFF can update drivers
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<DriverResponseDTO>> updateDriver(
             @PathVariable Integer id,
             @Valid @RequestBody DriverRequestDTO request) {

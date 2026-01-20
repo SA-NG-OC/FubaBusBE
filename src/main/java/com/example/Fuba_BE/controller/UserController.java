@@ -87,7 +87,7 @@ public class UserController {
      * ADMIN and STAFF can view all users
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<UserResponseDTO>>> getAllUsers(
             @RequestParam(required = false) Integer roleId, // [NEW] Nhận roleId
             @RequestParam(required = false) String keyword, // [NEW] Nhận từ khóa tìm kiếm
@@ -106,7 +106,7 @@ public class UserController {
      * ADMIN and STAFF can view customers
      */
     @GetMapping("/customers")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<UserResponseDTO>>> getCustomers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
@@ -121,7 +121,7 @@ public class UserController {
      * ADMIN and STAFF can view user details
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<UserResponseDTO>> getUserById(
             @PathVariable Integer id) {
         log.info("📥 Request to get user by ID: {}", id);
@@ -134,7 +134,7 @@ public class UserController {
      * ADMIN and STAFF can view users by role
      */
     @GetMapping("/role/{roleId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<List<UserResponseDTO>>> getUsersByRole(
             @PathVariable Integer roleId) {
         log.info("📥 Request to get users by role ID: {}", roleId);
@@ -225,7 +225,7 @@ public class UserController {
      * ADMIN and STAFF can view employee profiles
      */
     @GetMapping("/{id}/profile")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<ProfileResponseDTO>> getEmployeeProfile(
             @PathVariable Integer id) {
         log.info("📥 Admin/Staff requesting employee profile for ID: {}", id);
@@ -238,7 +238,7 @@ public class UserController {
      * ADMIN and STAFF can update employee profiles
      */
     @PutMapping("/{id}/profile")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<ProfileResponseDTO>> updateEmployeeProfile(
             @PathVariable Integer id,
             @Valid @RequestBody UpdateProfileRequest request) {

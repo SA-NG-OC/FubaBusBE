@@ -48,9 +48,10 @@ public class VehicleController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
-    public ResponseEntity<ApiResponse<VehicleStatsDTO>> getVehicleStats() {
-        VehicleStatsDTO stats = vehicleService.getVehicleStats();
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
+    public ResponseEntity<ApiResponse<VehicleStatsDTO>> getVehicleStats(
+            @RequestParam(required = false) Integer routeId) {
+        VehicleStatsDTO stats = vehicleService.getVehicleStats(routeId);
         return ResponseEntity.ok(ApiResponse.success("Vehicle statistics retrieved", stats));
     }
 
@@ -59,7 +60,7 @@ public class VehicleController {
      * ADMIN and STAFF can view vehicles
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<Page<VehicleResponseDTO>>> getAllVehicles(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
@@ -75,7 +76,7 @@ public class VehicleController {
      * ADMIN and STAFF can view vehicle details
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<VehicleResponseDTO>> getVehicleById(@PathVariable Integer id) {
         log.info("📥 Request to get vehicle by ID: {}", id);
         VehicleResponseDTO vehicle = vehicleService.getVehicleById(id);
@@ -87,7 +88,7 @@ public class VehicleController {
      * Only ADMIN and STAFF can create vehicles
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<VehicleResponseDTO>> createVehicle(
             @Valid @RequestBody VehicleRequestDTO request) {
         log.info("📥 Request to create vehicle with license plate: {}", request.getLicensePlate());
@@ -101,7 +102,7 @@ public class VehicleController {
      * Only ADMIN and STAFF can update vehicles
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'STAFF')")
     public ResponseEntity<ApiResponse<VehicleResponseDTO>> updateVehicle(
             @PathVariable Integer id,
             @Valid @RequestBody VehicleRequestDTO request) {
